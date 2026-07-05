@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="vi">
+  <head>
+    <meta charset="utf-8" />
+    <title>Thư viện cuộc họp — Smart Meeting Assistant</title>
+    <link rel="stylesheet" href="viewer.css" />
+  </head>
+  <body>
+    <aside>
+      <header>
+        <h1>📚 Thư viện cuộc họp</h1>
+        <p class="note">Toàn bộ dữ liệu nằm trong trình duyệt của bạn</p>
+      </header>
+      <ul id="list"></ul>
+      <p id="empty" class="empty" hidden>
+        Chưa có cuộc họp nào.<br />Mở tab cuộc họp và bấm icon extension để bắt đầu ghi.
+      </p>
+    </aside>
+
+    <main id="detail" hidden>
+      <header class="detail-head">
+        <input id="d-title" class="title-input" />
+        <div class="meta-line">
+          <span id="d-date"></span> · <span id="d-duration"></span> ·
+          <span id="d-status" class="chip"></span>
+        </div>
+      </header>
+
+      <audio id="d-audio" controls></audio>
+
+      <section id="d-summary-box">
+        <h2>✨ Tóm tắt điểm chính <span id="d-method" class="chip"></span></h2>
+        <ul id="d-keypoints"></ul>
+        <div id="d-keypoints-translated-box" hidden>
+          <h3>Bản dịch</h3>
+          <ul id="d-keypoints-translated"></ul>
+        </div>
+        <div id="d-actions-box" hidden>
+          <h3>✅ Việc cần làm</h3>
+          <ul id="d-actions"></ul>
+        </div>
+      </section>
+
+      <section>
+        <h2>📝 Transcript
+          <label class="small"><input type="checkbox" id="d-show-trans" checked /> hiện bản dịch</label>
+        </h2>
+        <div id="d-segments"></div>
+      </section>
+
+      <footer class="toolbar">
+        <button id="d-export-md">⬇ Markdown</button>
+        <button id="d-export-json">⬇ JSON</button>
+        <button id="d-export-audio">⬇ Audio</button>
+        <select id="d-model">
+          <option value="Xenova/whisper-base">Whisper Base</option>
+          <option value="Xenova/whisper-small">Whisper Small (chính xác)</option>
+        </select>
+        <button id="d-retranscribe">🔁 Phiên âm lại</button>
+        <button id="d-delete" class="danger">🗑 Xóa</button>
+      </footer>
+    </main>
+
+    <main id="placeholder" class="placeholder">Chọn một cuộc họp để xem chi tiết</main>
+
+    <script type="module" src="viewer.js"></script>
+  </body>
+</html>

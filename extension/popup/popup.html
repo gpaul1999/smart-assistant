@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="vi">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <header>
+      <div class="logo">🎙️</div>
+      <div>
+        <h1>Smart Meeting Assistant</h1>
+        <p class="tagline">Ghi âm · Phiên âm · Dịch · Tóm tắt — 100% local</p>
+      </div>
+    </header>
+
+    <section id="tab-info" class="card">
+      <div class="row">
+        <span class="label">Tab hiện tại</span>
+        <span id="tab-title" class="value">…</span>
+      </div>
+      <div class="row">
+        <span class="label">Microphone</span>
+        <span id="mic-status" class="value">…</span>
+        <button id="mic-grant" class="link-btn" hidden>Cấp quyền</button>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="row">
+        <label class="label" for="target-lang">Dịch sang</label>
+        <select id="target-lang">
+          <option value="">Không dịch</option>
+          <option value="vi">Tiếng Việt</option>
+          <option value="en">English</option>
+          <option value="ja">日本語</option>
+          <option value="ko">한국어</option>
+          <option value="zh">中文</option>
+          <option value="fr">Français</option>
+          <option value="de">Deutsch</option>
+          <option value="es">Español</option>
+        </select>
+      </div>
+      <div class="row">
+        <label class="label" for="open-live">Cửa sổ phụ đề live</label>
+        <input type="checkbox" id="open-live" checked />
+      </div>
+      <details>
+        <summary>Nâng cao</summary>
+        <div class="row">
+          <label class="label" for="source-lang">Ngôn ngữ cuộc họp</label>
+          <select id="source-lang">
+            <option value="auto">Tự phát hiện</option>
+            <option value="vi">Tiếng Việt</option>
+            <option value="en">English</option>
+            <option value="ja">日本語</option>
+            <option value="ko">한국어</option>
+            <option value="zh">中文</option>
+          </select>
+        </div>
+        <div class="row">
+          <label class="label" for="live-model">Model live</label>
+          <select id="live-model">
+            <option value="Xenova/whisper-tiny">Whisper Tiny (nhanh)</option>
+            <option value="Xenova/whisper-base">Whisper Base</option>
+          </select>
+        </div>
+      </details>
+    </section>
+
+    <div id="error" class="error" hidden></div>
+
+    <button id="toggle" class="primary" disabled>Bắt đầu ghi</button>
+    <div id="rec-status" class="rec-status" hidden>
+      <span class="rec-dot"></span>
+      <span id="rec-elapsed">00:00</span>
+      <span id="rec-title" class="rec-title"></span>
+    </div>
+
+    <footer>
+      <button id="open-viewer" class="link-btn">📚 Thư viện cuộc họp</button>
+      <button id="open-live-window" class="link-btn" hidden>💬 Phụ đề live</button>
+    </footer>
+
+    <script type="module" src="popup.js"></script>
+  </body>
+</html>

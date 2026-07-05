@@ -1,0 +1,5 @@
+node_modules/
+extension/vendor/
+test-results/
+playwright-report/
+tests/e2e/.artifacts/

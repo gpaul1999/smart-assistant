@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="vi">
+  <head>
+    <meta charset="utf-8" />
+    <title>Phụ đề live — Smart Meeting Assistant</title>
+    <link rel="stylesheet" href="live.css" />
+  </head>
+  <body>
+    <header>
+      <div>
+        <h1>💬 Phụ đề trực tiếp</h1>
+        <p id="meta" class="meta">Chưa có phiên ghi âm nào đang chạy</p>
+      </div>
+      <button id="stop" class="stop" hidden>⏹ Dừng ghi</button>
+    </header>
+    <div id="notice" class="notice" hidden></div>
+    <main id="feed" aria-live="polite"></main>
+    <footer>
+      <label><input type="checkbox" id="show-original" checked /> Hiện bản gốc</label>
+      <span id="model-progress"></span>
+    </footer>
+    <script type="module" src="live.js"></script>
+  </body>
+</html>
