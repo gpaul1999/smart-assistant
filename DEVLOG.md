@@ -1,5 +1,23 @@
 # DEVLOG — smart-assistant
 
+## 2026-07-05 — Office hours: phản biện sản phẩm (gstack methodology)
+
+Chạy phương pháp `/office-hours` (gstack, fork pin `11de390` — clone dùng trực tiếp, không
+cài toolkit giữa session) theo yêu cầu "phản biện để thân thiện tuyệt đối + kiếm tiền".
+Biên bản đầy đủ: `docs/office-hours-2026-07-05.md`. Điểm chính:
+
+- **Phát hiện thị trường**: "local-first" không còn là vùng trống (Meetily open-source,
+  Notta Privacy Mode 7/2026, Fathom free unlimited) → moat thật = live translation
+  on-device trong browser + không bot + nhãn Bạn/Đối phương cho ôn phỏng vấn.
+- **Rủi ro #1**: chất lượng Whisper tiny với vi/ja giết trải nghiệm đầu → benchmark máy tự
+  chọn model + WebGPU nâng ưu tiên; live caption định vị "bản nháp nhanh".
+- **4 quyết định founder đã chốt** (D1–D4): chưa có bằng chứng cầu (assignments bắt buộc);
+  định vị wedge phỏng vấn song ngữ; freemium free-hào-phóng + Pro; overlay phụ đề trong
+  tab họp làm mặc định.
+- Encode thành `specs/002-interview-first-ux/spec.md` (FR-021→FR-030, SC-009→SC-013) —
+  phạm vi chủ đích hẹp: đưa sản phẩm đến tay người thử đầu tiên (store beta, onboarding
+  3 phút, overlay, i18n, consent, khung license). Chờ duyệt spec trước khi `/speckit-plan`.
+
 ## 2026-07-05 — Thiết kế bằng spec-kit (SDD) trước khi build tiếp
 
 Theo yêu cầu chủ dự án ("dùng spec/planning skill để thiết kế đã"), cài **spec-kit** theo
