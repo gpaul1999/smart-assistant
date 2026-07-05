@@ -1,5 +1,29 @@
 # DEVLOG — smart-assistant
 
+## 2026-07-05 — Thiết kế bằng spec-kit (SDD) trước khi build tiếp
+
+Theo yêu cầu chủ dự án ("dùng spec/planning skill để thiết kế đã"), cài **spec-kit** theo
+bảng cài đặt §0 của base-project-require-skills (`uv tool install specify-cli`, integration
+claude) — chọn spec-kit thay vì gstack vì cần artifact thiết kế bền vững, truy vết được
+trong repo. Đã chạy trọn pipeline:
+
+- `/speckit-constitution` → `.specify/memory/constitution.md` **v1.0.0** — 6 nguyên tắc:
+  local-first tuyệt đối, simplicity first, lib environment-agnostic, test đi kèm, một
+  pipeline chung cho mọi persona, hiệu năng ≤2s + degrade mượt.
+- `/speckit-specify` → `specs/001-meeting-assistant-core/spec.md` — 5 user story (P1–P3),
+  20 FR, 8 success criteria đo được; checklist chất lượng pass toàn bộ. FR-001→FR-015 đã
+  đạt ở v0.1; gap: crash-safe (FR-016), phiên 3h (FR-017), model UX (FR-018), quota
+  (FR-019), tab đóng (FR-020), đo nhãn người nói (SC-008).
+- `/speckit-plan` → plan.md + research.md (R1–R6: persist chunk WebM prefix; demuxer
+  webm-opus tự viết + WebCodecs AudioDecoder cửa sổ 10'; progress model có sẵn; storage
+  policy 70/90%; track.onended; harness fixture SC-008) + data-model.md (IndexedDB v2,
+  store `audio_chunks`, status `interrupted`) + contracts/messages.md + quickstart.md.
+  Constitution gate: PASS cả 6 nguyên tắc, không vi phạm cần justify.
+- `/speckit-tasks` → tasks.md: 26 task theo user story, MVP = Phase 2+3, ba chuỗi US5
+  độc lập ship riêng được.
+
+**Trạng thái**: chờ chủ dự án review thiết kế trước khi `/speckit-implement`.
+
 ## 2026-07-05 — Live caption độ trễ thấp (interim/partial ≤2s)
 
 Yêu cầu từ chủ dự án: (a) hai đối tượng khách hàng dùng chung một bộ chức năng — xác nhận

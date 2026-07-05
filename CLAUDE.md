@@ -42,6 +42,10 @@ Tuân theo bộ quy tắc & bảng routing tại
 https://github.com/gpaul1999/base-project-require-skills/blob/main/skills/README.md.
 
 - E2E test / browser / screenshot → skill `playwright-e2e` (auto, đã vendor tại `.claude/skills/`).
+- Thiết kế/triển khai feature có kỷ luật → `spec-kit` (ĐÃ CÀI): `/speckit-specify` →
+  `/speckit-plan` → `/speckit-tasks` → `/speckit-implement`; artifact tại `specs/<NNN-feature>/`,
+  constitution tại `.specify/memory/constitution.md` (nguồn chân lý nguyên tắc — khi lệch,
+  constitution thắng CLAUDE.md).
 - Đọc file PDF/Office/ảnh/audio → skill `markitdown` (chưa cài — nếu cần, cài theo bảng cài đặt §0
   của skills/README.md ở repo base).
 
