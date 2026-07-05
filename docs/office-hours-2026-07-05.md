@@ -152,3 +152,18 @@ Kết quả được encode thành **`specs/002-interview-first-ux/`** (spec-kit
 bằng chứng, phạm vi 002 giới hạn ở các mục đưa sản phẩm **đến được tay người thử** (store
 beta, onboarding, chất lượng phụ đề, overlay) — không nở thêm cho tới khi assignments có
 kết quả.
+
+### Bổ sung cùng ngày — D5: Copilot trả lời từ tài liệu (tính năng Pro chủ lực)
+
+Chủ dự án đề xuất "interview answer mode"; sau tranh luận về ranh giới Cluely-style, chốt
+ban đầu "chỉ C + B, không A" (không sinh câu trả lời live). Chủ dự án sau đó **làm rõ ý
+định gốc**: vấn đề thật là *tài liệu quá lớn để nhớ chính xác* — user chỉ định tài liệu
+trước (hợp đồng, spec, CV/JD…), sản phẩm đề xuất trả lời **dựa trên tài liệu đó**.
+
+**D5 (tinh chỉnh)**: cho phép sinh câu trả lời đề xuất khi và chỉ khi **có căn cứ trích
+dẫn từ tài liệu của user** (grounded, mọi ý truy về nguồn); cấm tuyệt đối nội dung không
+căn cứ — không tìm thấy thì nói "không tìm thấy trong tài liệu". Điều cấm là *bịa*, không
+phải *sinh*. Reframe này còn mở rộng persona trả tiền: người họp khách hàng với tài liệu
+dày (hợp đồng/spec) — nhóm không dám dán tài liệu mật vào chatbot cloud, và local-first
+của ta là câu trả lời duy nhất. Encode: `specs/003-interview-copilot/spec.md`
+(FR-031→038, SC-014→019).

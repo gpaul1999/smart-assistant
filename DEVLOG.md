@@ -17,6 +17,14 @@ Biên bản đầy đủ: `docs/office-hours-2026-07-05.md`. Điểm chính:
 - Encode thành `specs/002-interview-first-ux/spec.md` (FR-021→FR-030, SC-009→SC-013) —
   phạm vi chủ đích hẹp: đưa sản phẩm đến tay người thử đầu tiên (store beta, onboarding
   3 phút, overlay, i18n, consent, khung license). Chờ duyệt spec trước khi `/speckit-plan`.
+- **D5 — Copilot trả lời từ tài liệu (spec 003)**: từ ý tưởng "interview answer mode" của
+  chủ dự án, qua tranh luận ranh giới Cluely-style rồi được làm rõ thành "đề xuất trả lời
+  dựa trên tài liệu user chỉ định trước (tài liệu quá lớn để nhớ)". Nguyên tắc chốt:
+  grounded-only — mọi ý phải trích dẫn được về tài liệu, không căn cứ thì báo "không tìm
+  thấy", 0 bịa (SC-016). Kiến trúc: chunk + truy hồi BM25 thuần JS (lib env-agnostic) →
+  Gemini Nano (Prompt API, on-device, stable cho extension từ Chrome 138) tổng hợp từ
+  trích đoạn. Hai tầng hiển thị: trích đoạn ≤1.5s, câu đề xuất ≤5s. Spec:
+  `specs/003-interview-copilot/spec.md` (FR-031→038, SC-014→019).
 
 ## 2026-07-05 — Thiết kế bằng spec-kit (SDD) trước khi build tiếp
 
