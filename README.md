@@ -15,12 +15,15 @@ bạn chọn, và tóm tắt các điểm chính sau khi kết thúc.
 - **Người đi làm họp dài với khách hàng** — không sợ sót thông tin: toàn bộ lịch sử được lưu,
   kèm **tóm tắt điểm chính** và **danh sách việc cần làm (action items)** để nhớ lại từng point.
 
+> Hai đối tượng trên dùng chung **một bộ tính năng, một pipeline** — không có "chế độ" riêng.
+> Chỉ khác cách bạn tận dụng: phỏng vấn thì nhìn phụ đề live, họp dài thì đọc tóm tắt sau.
+
 ## Tính năng
 
 | | |
 |---|---|
 | 🔴 Ghi âm | Tab audio (speaker) qua `tabCapture` + microphone, mix thành một file `.webm` |
-| 📝 Phiên âm live | Whisper (tiny/base/small) chạy **local** bằng transformers.js + WASM |
+| 📝 Phiên âm live | Whisper (tiny/base/small) chạy **local** (transformers.js + WASM); phụ đề tạm cập nhật mỗi ~1.2s (mục tiêu ≤2s sau khi nói), chốt câu kèm dịch khi ngắt hơi ~0.45s |
 | 🌐 Dịch live | Chrome **Translator API** (Gemini Nano, **on-device**) — phụ đề song ngữ realtime |
 | 🗣️ Ai đang nói | Gắn nhãn "Bạn" / "Đối phương" theo năng lượng âm của từng nguồn (mic vs tab) |
 | ✨ Tóm tắt | Chrome **Summarizer API** (on-device); không có thì fallback extractive thuần JS (vi+en) |
@@ -81,5 +84,6 @@ Quy tắc & routing skill cho AI agent: xem [CLAUDE.md](CLAUDE.md) (theo bộ sk
 
 - Phiên âm lại (re-transcribe) decode toàn bộ audio vào RAM — phù hợp cuộc họp ≤ ~1 giờ.
 - Whisper tiny/base đủ dùng cho tiếng Anh; tiếng Việt nên chọn Whisper Small (Nâng cao).
-- Live caption có độ trễ ~4–15s (cắt đoạn theo khoảng lặng + tốc độ inference WASM).
+- Độ trễ phụ đề tạm ≤2s là mục tiêu với Whisper Tiny trên máy hiện đại; máy yếu/model to hơn
+  sẽ chậm hơn (partial tự bỏ nhịp khi inference bận, không dồn hàng đợi — câu chốt không bao giờ mất).
 - Crash giữa chừng: transcript live đã lưu dần vẫn còn, nhưng file audio của phiên đó mất.

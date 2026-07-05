@@ -27,6 +27,8 @@ main { flex: 1; overflow-y: auto; padding: 12px 14px; }
 .seg .orig { opacity: 0.85; }
 .seg .trans { color: #9be8a8; font-weight: 500; }
 body.hide-original .orig { display: none; }
+.seg.interim { opacity: 0.65; }
+.seg.interim .orig { font-style: italic; }
 .notice {
   margin: 10px 14px 0; padding: 8px 10px; border-radius: 8px;
   background: #4a3b12; color: #ffd479; font-size: 12px;

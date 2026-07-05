@@ -35,6 +35,9 @@ async function init() {
     if (msg.type === 'live-segment' && (!meetingId || msg.meetingId === meetingId)) {
       meetingId = msg.meetingId;
       renderSegment(msg.segment);
+    } else if (msg.type === 'live-partial' && (!meetingId || msg.meetingId === meetingId)) {
+      meetingId = msg.meetingId;
+      renderPartial(msg.partial);
     } else if (msg.type === 'recording-started') {
       meetingId = msg.meetingId;
       meta.textContent = `Đang ghi: ${msg.title || ''}`;
@@ -52,7 +55,14 @@ async function init() {
   });
 }
 
+let interimEl = null;
+
 function renderSegment(seg) {
+  // câu chốt thay thế phụ đề tạm của cùng buffer
+  if (interimEl && Number(interimEl.dataset.t0) === seg.t0) {
+    interimEl.remove();
+    interimEl = null;
+  }
   const div = document.createElement('div');
   div.className = 'seg';
   const who = seg.speaker
@@ -65,7 +75,27 @@ function renderSegment(seg) {
   `;
   div.querySelector('.orig').textContent = seg.text;
   if (seg.translation) div.querySelector('.trans').textContent = seg.translation;
-  feed.appendChild(div);
+  // câu chốt luôn đứng trước phụ đề tạm (nếu tạm của câu sau đã hiện)
+  if (interimEl) feed.insertBefore(div, interimEl);
+  else feed.appendChild(div);
+  feed.scrollTop = feed.scrollHeight;
+}
+
+function renderPartial(p) {
+  if (!interimEl || Number(interimEl.dataset.t0) !== p.t0) {
+    interimEl?.remove();
+    interimEl = document.createElement('div');
+    interimEl.className = 'seg interim';
+    interimEl.innerHTML = `
+      <div class="head"></div>
+      <div class="orig"></div>
+      <div class="trans"></div>`;
+    feed.appendChild(interimEl);
+  }
+  interimEl.dataset.t0 = p.t0;
+  interimEl.querySelector('.head').textContent = `${secToClock(p.t0)} · đang nghe…`;
+  interimEl.querySelector('.orig').textContent = p.text;
+  if (p.translation) interimEl.querySelector('.trans').textContent = p.translation;
   feed.scrollTop = feed.scrollHeight;
 }
 

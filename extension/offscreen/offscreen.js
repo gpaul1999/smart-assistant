@@ -8,9 +8,11 @@ import { patchMeeting, getMeeting, saveAudio, getAudio } from '../lib/db.js';
 import { Transcriber, isNoiseTranscript } from '../lib/transcriber.js';
 import { summarize } from '../lib/summarizer.js';
 import { translateText } from '../lib/translator.js';
+import { Segmenter, rmsOf, mixdown } from '../lib/segmenter.js';
 import { uid } from '../lib/format.js';
 
 const SR = 16000;
+const PARTIAL_TICK_MS = 1200; // nhịp phiên âm "tạm" — mục tiêu phụ đề hiện ≤2s sau khi nói
 const VENDOR_URL = chrome.runtime.getURL('vendor/');
 
 const DEFAULT_SETTINGS = {
@@ -32,6 +34,26 @@ const transcriber = new Transcriber({
 
 let session = null; // phiên ghi âm đang chạy
 let busyReprocess = false;
+
+// Mutex inference: câu chốt (final) luôn được chạy tuần tự qua queue; phụ đề tạm (partial)
+// là lossy — thấy Whisper bận thì bỏ nhịp đó, không bao giờ dồn hàng đợi gây lag lũy tiến.
+let inferLock = Promise.resolve();
+let inferBusy = 0;
+function runExclusive(fn) {
+  const prev = inferLock;
+  let release;
+  inferLock = new Promise((r) => (release = r));
+  return (async () => {
+    await prev;
+    inferBusy++;
+    try {
+      return await fn();
+    } finally {
+      inferBusy--;
+      release();
+    }
+  })();
+}
 
 function broadcast(msg) {
   chrome.runtime.sendMessage(msg).catch(() => {});
@@ -142,6 +164,7 @@ async function startRecording({ streamId, settings, meta }) {
   tap.port.onmessage = (e) => {
     if (session && !session.stopped) session.segmenter.push(e.data.mic, e.data.tab);
   };
+  session.partialTimer = setInterval(partialTick, PARTIAL_TICK_MS);
 
   await patchMeeting(meetingId, {
     title: meta.title,
@@ -171,6 +194,7 @@ async function stopRecording() {
   if (!session) return;
   const s = session;
   s.stopped = true;
+  clearInterval(s.partialTimer);
 
   // dừng recorder và các track
   await new Promise((resolve) => {
@@ -199,67 +223,37 @@ async function stopRecording() {
   await finalizeSummary(s.id, s.cfg);
 }
 
-// Cắt PCM thành đoạn theo khoảng lặng (>=0.6s sau ít nhất 3s nói) hoặc tối đa 15s.
-class Segmenter {
-  constructor({ sr, onSegment }) {
-    this.sr = sr;
-    this.onSegment = onSegment;
-    this.mic = [];
-    this.tab = [];
-    this.len = 0;
-    this.silenceSamples = 0;
-    this.absSample = 0;
-    this.startSample = 0;
+// Phụ đề tạm: phiên âm buffer đang tích lũy mỗi PARTIAL_TICK_MS, hiển thị ngay,
+// sẽ được câu chốt (final, kèm dịch) thay thế khi người nói ngắt hơi.
+async function partialTick() {
+  const s = session;
+  if (!s || s.stopped || inferBusy) return;
+  const snap = s.segmenter.snapshot();
+  if (!snap || !snap.hadVoice || snap.len < SR) return; // chưa đủ 1s tiếng nói
+  if (snap.t1 === s.lastPartialT1) return; // không có audio mới từ nhịp trước
+  s.lastPartialT1 = snap.t1;
+
+  try {
+    const mixed = mixdown(snap.mic, snap.tab);
+    if (rmsOf(mixed) < 0.004) return;
+    const { text } = await runExclusive(() =>
+      transcriber.transcribe(mixed, { model: s.cfg.liveModel, language: s.cfg.sourceLang })
+    );
+    if (session !== s || s.stopped || isNoiseTranscript(text)) return;
+    const partial = { t0: snap.t0, t1: snap.t1, text };
+    broadcast({ type: 'live-partial', meetingId: s.id, partial });
+
+    // dịch partial bất đồng bộ — chỉ broadcast nếu buffer này vẫn là buffer đang nói dở
+    translateText(text, { sourceLang: s.cfg.sourceLang, targetLang: s.cfg.targetLang })
+      .then((translation) => {
+        if (translation && session === s && !s.stopped) {
+          broadcast({ type: 'live-partial', meetingId: s.id, partial: { ...partial, translation } });
+        }
+      })
+      .catch(() => {});
+  } catch (e) {
+    console.error('[partial]', e);
   }
-
-  push(mic, tab) {
-    this.mic.push(mic);
-    this.tab.push(tab);
-    this.len += mic.length;
-    this.absSample += mic.length;
-
-    let sum = 0;
-    for (let i = 0; i < mic.length; i++) {
-      const v = mic[i] + tab[i];
-      sum += v * v;
-    }
-    const rms = Math.sqrt(sum / mic.length);
-    this.silenceSamples = rms < 0.008 ? this.silenceSamples + mic.length : 0;
-
-    const dur = this.len / this.sr;
-    const sil = this.silenceSamples / this.sr;
-    if ((dur >= 3 && sil >= 0.6) || dur >= 15) this.flush();
-  }
-
-  flush() {
-    if (!this.len) return;
-    const mic = concat(this.mic, this.len);
-    const tab = concat(this.tab, this.len);
-    const t0 = this.startSample / this.sr;
-    const t1 = this.absSample / this.sr;
-    this.mic = [];
-    this.tab = [];
-    this.len = 0;
-    this.silenceSamples = 0;
-    this.startSample = this.absSample;
-    this.onSegment({ mic, tab, t0, t1 });
-  }
-}
-
-function concat(arrays, total) {
-  const out = new Float32Array(total);
-  let off = 0;
-  for (const a of arrays) {
-    out.set(a, off);
-    off += a.length;
-  }
-  return out;
-}
-
-function rmsOf(a) {
-  let sum = 0;
-  for (let i = 0; i < a.length; i++) sum += a[i] * a[i];
-  return Math.sqrt(sum / (a.length || 1));
 }
 
 function enqueueSegment({ mic, tab, t0, t1 }) {
@@ -271,13 +265,10 @@ function enqueueSegment({ mic, tab, t0, t1 }) {
       const rmsTab = rmsOf(tab);
       if (Math.max(rmsMic, rmsTab) < 0.004) return; // im lặng
 
-      const mixed = new Float32Array(mic.length);
-      for (let i = 0; i < mic.length; i++) mixed[i] = Math.max(-1, Math.min(1, mic[i] + tab[i]));
-
-      const { text } = await transcriber.transcribe(mixed, {
-        model: s.cfg.liveModel,
-        language: s.cfg.sourceLang,
-      });
+      const mixed = mixdown(mic, tab);
+      const { text } = await runExclusive(() =>
+        transcriber.transcribe(mixed, { model: s.cfg.liveModel, language: s.cfg.sourceLang })
+      );
       if (isNoiseTranscript(text)) return;
 
       let speaker = 'both';

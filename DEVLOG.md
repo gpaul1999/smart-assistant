@@ -1,5 +1,22 @@
 # DEVLOG — smart-assistant
 
+## 2026-07-05 — Live caption độ trễ thấp (interim/partial ≤2s)
+
+Yêu cầu từ chủ dự án: (a) hai đối tượng khách hàng dùng chung một bộ chức năng — xác nhận
+kiến trúc đã vậy từ đầu, chỉ làm rõ trong README; (b) độ trễ phụ đề tối đa ~2s.
+
+Thiết kế cũ chỉ hiện phụ đề khi chốt đoạn (≥3s nói + 0.6s lặng, max 15s) → trễ 4–15s.
+Chuyển sang mô hình **interim caption** kiểu Google Meet:
+
+- `partialTick` mỗi 1.2s phiên âm buffer đang tích lũy → broadcast `live-partial`,
+  UI hiện dòng mờ/nghiêng "đang nghe…", dịch partial theo sau bất đồng bộ.
+- Ngưỡng chốt câu hạ xuống: 0.45s lặng sau ≥1s nói, max window 15s → 10s (bound inference).
+- **Mutex inference** (`runExclusive`): final đi qua queue tuần tự (không bao giờ mất);
+  partial là lossy — Whisper đang bận thì bỏ nhịp, tránh lag lũy tiến khi máy yếu.
+- Tách `Segmenter` từ offscreen.js ra `extension/lib/segmenter.js` (environment-agnostic,
+  đúng nguyên tắc CLAUDE.md §3) + thêm `snapshot()` không reset buffer cho partial;
+  thêm `hadVoice` để im lặng kéo dài không sinh đoạn rác. 6 unit test mới (tổng 23 + 7 E2E).
+
 ## 2026-07-05 — v0.1.0: Meeting Recorder local-first (khởi tạo)
 
 **Quyết định kiến trúc chính:**

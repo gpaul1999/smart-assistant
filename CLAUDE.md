@@ -12,7 +12,8 @@ trong IndexedDB của trình duyệt — không gửi audio/transcript ra ngoài
   - `offscreen/` — offscreen document: capture tab + mic, mix bằng AudioContext, MediaRecorder,
     chạy pipeline phiên âm + tóm tắt.
   - `lib/` — module dùng chung, thuần ES module, không phụ thuộc môi trường (test được bằng Node):
-    `db.js` (IndexedDB), `summarizer.js` (tóm tắt), `transcriber.js` (Whisper), `format.js`.
+    `db.js` (IndexedDB), `summarizer.js` (tóm tắt), `transcriber.js` (Whisper),
+    `segmenter.js` (cắt đoạn PCM theo khoảng lặng), `format.js`.
   - `popup/`, `viewer/`, `permission/` — UI.
   - `vendor/` — transformers.js + ONNX Runtime WASM, sinh bởi `npm run vendor` (KHÔNG commit,
     KHÔNG sửa tay).
