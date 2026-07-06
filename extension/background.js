@@ -3,6 +3,7 @@
 
 import * as db from './lib/db.js';
 import { recoverInterrupted } from './lib/recovery.js';
+import { verifyLicense, PROD_PUBLIC_KEY } from './lib/license.js';
 
 // Crash-safe recovery (FR-016): mỗi lần service worker khởi động lạnh, quét các phiên
 // 'recording' mồ côi (crash/kill trước đó) → ghép audio từ chunks, đánh dấu 'interrupted'.
@@ -121,12 +122,21 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
           const streamId = await chrome.tabCapture.getMediaStreamId({
             targetTabId: msg.tabId,
           });
-          const { settings = {} } = await chrome.storage.local.get('settings');
+          const { settings = {}, license, licensePubKey } = await chrome.storage.local.get([
+            'settings', 'license', 'licensePubKey',
+          ]);
+          // spec 003: Copilot chỉ chạy khi Pro + đã chọn bộ tài liệu (FR-037)
+          let copilot = null;
+          if (settings.copilotDocsetId && license?.key) {
+            const v = await verifyLicense(license.key, licensePubKey || PROD_PUBLIC_KEY);
+            if (v.valid) copilot = { docsetId: settings.copilotDocsetId };
+          }
           await chrome.runtime.sendMessage({
             type: 'offscreen-start',
             streamId,
             settings,
             ephemeral: !!msg.ephemeral,
+            copilot,
             meta: { title: msg.tabTitle || 'Cuộc họp', tabId: msg.tabId },
           });
           sendResponse({ ok: true });
@@ -176,7 +186,8 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
         }
 
         case 'live-partial':
-        case 'live-segment': {
+        case 'live-segment':
+        case 'answer-card': {
           if (overlayInjected && recordingTabId != null) {
             chrome.tabs.sendMessage(recordingTabId, msg).catch(() => {});
           }

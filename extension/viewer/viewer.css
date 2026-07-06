@@ -91,3 +91,8 @@ body.hide-trans .seg-trans { display: none; }
 .toolbar button:hover { border-color: var(--accent); }
 .toolbar .danger { color: var(--danger); margin-left: auto; }
 .toolbar .danger:hover { border-color: var(--danger); }
+
+.review-item { border: 1px solid var(--border); border-radius: 10px; padding: 8px 12px; margin-bottom: 8px; }
+.review-item .rq { font-weight: 600; }
+.review-item .ra { opacity: 0.8; font-size: 13px; margin: 4px 0; }
+.review-item .rv { white-space: pre-wrap; font: 12px/1.5 inherit; color: #16a34a; margin: 4px 0 0; }

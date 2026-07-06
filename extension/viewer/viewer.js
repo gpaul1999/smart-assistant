@@ -3,6 +3,10 @@ import { secToClock, fmtDate, buildMarkdown, SPEAKER_LABELS } from '../lib/forma
 import { assess, fmtBytes } from '../lib/storage-policy.js';
 import { localize } from '../lib/i18n.js';
 import { verifyLicense, PROD_PUBLIC_KEY } from '../lib/license.js';
+import { listDocs } from '../lib/db.js';
+import { buildIndex, search, chunkText } from '../lib/retrieval.js';
+import { pairQA } from '../lib/question.js';
+import { reviewAnswer, promptApiAvailable } from '../lib/prompter.js';
 
 const $ = (id) => document.getElementById(id);
 const STATUS_LABELS = {
@@ -75,6 +79,8 @@ async function init() {
       model: $('d-model').value,
     });
   });
+  $('d-review').addEventListener('click', runReview);
+
   $('d-delete').addEventListener('click', async () => {
     if (!confirm('Xóa vĩnh viễn cuộc họp này (audio + transcript + tóm tắt)?')) return;
     await deleteMeeting(currentId);
@@ -99,6 +105,81 @@ async function init() {
       if (msg.type === 'pipeline-status' && msg.status === 'done') await renderQuota();
     }
   });
+}
+
+// spec 003 US3: rà soát hỏi–đáp so với tài liệu (Pro + Prompt API)
+async function runReview() {
+  if (!(await isPro())) {
+    alert('Rà soát phỏng vấn là tính năng Pro — dán license key trong popup (Nâng cao).');
+    return;
+  }
+  if (!promptApiAvailable()) {
+    alert('Máy/trình duyệt chưa hỗ trợ Prompt API on-device (cần Chrome 138+). Không có dữ liệu nào được gửi đi đâu để thay thế.');
+    return;
+  }
+  const m = await getMeeting(currentId);
+  const { settings = {} } = await chrome.storage.local.get('settings');
+  const docsetId = m.copilotDocsetId || settings.copilotDocsetId;
+  if (!docsetId) {
+    alert('Chưa có bộ tài liệu — mở "Kho tài liệu" từ popup để tạo và chọn bộ cho phiên.');
+    return;
+  }
+  const docs = await listDocs(docsetId);
+  const chunks = docs.flatMap((d) =>
+    (d.chunks?.length ? d.chunks : chunkText(d.content)).map((c) => ({ ...c, docTitle: c.docTitle || d.title }))
+  );
+  if (!chunks.length) {
+    alert('Bộ tài liệu rỗng.');
+    return;
+  }
+  const index = buildIndex(chunks);
+  const pairs = pairQA(m.segments || []);
+  if (!pairs.length) {
+    alert('Không tìm thấy cặp hỏi–đáp nào trong transcript.');
+    return;
+  }
+
+  const st = $('d-review-status');
+  $('d-review-box').hidden = false;
+  const review = [];
+  for (let i = 0; i < pairs.length; i++) {
+    st.textContent = `${i + 1}/${pairs.length}…`;
+    const p = pairs[i];
+    const answerText = p.answers.map((a) => a.text).join(' ');
+    const queries = [p.question.text, p.question.translation].filter(Boolean);
+    const hits = search(index, queries, { k: 3 });
+    const verdict = hits.length
+      ? await reviewAnswer({
+          question: p.question.text,
+          answerText,
+          excerpts: hits.map((h) => ({ text: h.chunk.text, docTitle: h.chunk.docTitle })),
+          targetLang: m.targetLang || 'vi',
+        })
+      : null;
+    review.push({
+      t0: p.question.t0,
+      question: p.question.text,
+      answerText,
+      verdict: verdict || '(không có căn cứ trong tài liệu cho câu này)',
+    });
+    renderReview(review);
+  }
+  st.textContent = 'xong';
+  await patchMeeting(currentId, { review });
+}
+
+function renderReview(review) {
+  const wrap = $('d-review-items');
+  wrap.innerHTML = '';
+  for (const r of review || []) {
+    const div = document.createElement('div');
+    div.className = 'review-item';
+    div.innerHTML = `<div class="rq"></div><div class="ra"></div><pre class="rv"></pre>`;
+    div.querySelector('.rq').textContent = `❓ [${secToClock(r.t0)}] ${r.question}`;
+    div.querySelector('.ra').textContent = `🗣 ${r.answerText || '(không trả lời)'}`;
+    div.querySelector('.rv').textContent = r.verdict;
+    wrap.appendChild(div);
+  }
 }
 
 // FR-030: panel Dữ liệu của bạn
@@ -181,6 +262,13 @@ async function openMeeting(id, { keepAudio = false } = {}) {
   fillList('d-keypoints-translated', sum.keyPointsTranslated || []);
   $('d-actions-box').hidden = !sum.actionItems?.length;
   fillList('d-actions', sum.actionItems || []);
+
+  // review đã lưu (spec 003)
+  $('d-review-box').hidden = !m.review?.length;
+  if (m.review?.length) {
+    renderReview(m.review);
+    $('d-review-status').textContent = '';
+  }
 
   // transcript
   const wrap = $('d-segments');

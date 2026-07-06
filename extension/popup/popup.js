@@ -1,6 +1,7 @@
 import { assess, fmtBytes } from '../lib/storage-policy.js';
 import { localize } from '../lib/i18n.js';
 import { verifyLicense, PROD_PUBLIC_KEY } from '../lib/license.js';
+import { listDocSets } from '../lib/db.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -59,6 +60,16 @@ async function init() {
   $('open-onboarding').addEventListener('click', () =>
     chrome.tabs.create({ url: chrome.runtime.getURL('onboarding/onboarding.html') })
   );
+  $('open-docs').addEventListener('click', () =>
+    chrome.tabs.create({ url: chrome.runtime.getURL('docs/docs.html') })
+  );
+  await loadDocsets();
+  $('copilot-docset').addEventListener('change', async () => {
+    const { settings: cur = {} } = await chrome.storage.local.get('settings');
+    await chrome.storage.local.set({
+      settings: { ...cur, copilotDocsetId: $('copilot-docset').value || null },
+    });
+  });
   for (const id of ['target-lang', 'source-lang', 'live-model', 'caption-mode', 'ephemeral']) {
     $(id).addEventListener('change', saveSettings);
   }
@@ -146,6 +157,24 @@ async function onLicenseInput() {
     await chrome.storage.local.remove('license');
   }
   await refreshLicense();
+}
+
+// spec 003: chọn bộ tài liệu Copilot cho phiên
+async function loadDocsets() {
+  try {
+    const sets = await listDocSets();
+    const sel = $('copilot-docset');
+    for (const ds of sets) {
+      const opt = document.createElement('option');
+      opt.value = ds.id;
+      opt.textContent = ds.name;
+      sel.appendChild(opt);
+    }
+    const { settings = {} } = await chrome.storage.local.get('settings');
+    if (settings.copilotDocsetId) sel.value = settings.copilotDocsetId;
+  } catch (e) {
+    console.error('[docsets]', e);
+  }
 }
 
 // FR-021: nhắc quay lại onboarding khi bỏ dở

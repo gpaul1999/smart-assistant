@@ -19,6 +19,10 @@ import { translateText } from '../lib/translator.js';
 import { Segmenter, rmsOf, mixdown, labelSpeaker } from '../lib/segmenter.js';
 import { demuxWebmOpus } from '../lib/webm-opus.js';
 import { uid } from '../lib/format.js';
+import { listDocs } from '../lib/db.js';
+import { buildIndex, search, chunkText } from '../lib/retrieval.js';
+import { isQuestion } from '../lib/question.js';
+import { synthesizeAnswer } from '../lib/prompter.js';
 
 const SR = 16000;
 const PARTIAL_TICK_MS = 1200; // nhịp phiên âm "tạm" — mục tiêu phụ đề hiện ≤2s sau khi nói
@@ -105,9 +109,26 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
 
 // ---------------------------------------------------------------- ghi âm
 
-async function startRecording({ streamId, settings, meta, ephemeral = false }) {
+async function startRecording({ streamId, settings, meta, ephemeral = false, copilot = null }) {
   if (session) throw new Error('Đang có phiên ghi âm khác');
   const cfg = { ...DEFAULT_SETTINGS, ...settings };
+
+  // spec 003: nạp kho tài liệu Copilot (đã gate Pro ở background — FR-037)
+  let copilotIndex = null;
+  if (copilot?.docsetId) {
+    try {
+      const docs = await listDocs(copilot.docsetId);
+      const chunks = docs.flatMap((d) =>
+        (d.chunks?.length ? d.chunks : chunkText(d.content)).map((c) => ({
+          ...c,
+          docTitle: c.docTitle || d.title,
+        }))
+      );
+      if (chunks.length) copilotIndex = buildIndex(chunks);
+    } catch (e) {
+      console.error('[copilot] load docset', e);
+    }
+  }
 
   // Audio của tab (speaker của cuộc họp)
   const tabStream = await navigator.mediaDevices.getUserMedia({
@@ -195,6 +216,8 @@ async function startRecording({ streamId, settings, meta, ephemeral = false }) {
     queue: Promise.resolve(),
     segmenter: null,
     stopped: false,
+    copilotIndex,
+    copilotDocsetId: copilot?.docsetId || null,
   };
 
   session.segmenter = new Segmenter({
@@ -216,6 +239,7 @@ async function startRecording({ streamId, settings, meta, ephemeral = false }) {
       targetLang: cfg.targetLang,
       micUsed: !!micStream,
       liveModel: cfg.liveModel,
+      copilotDocsetId: copilot?.docsetId || null,
     });
   }
 
@@ -334,6 +358,7 @@ function enqueueSegment({ mic, tab, t0, t1 }) {
       s.segments.push(segment);
       if (!s.ephemeral) await patchMeeting(s.id, { segments: s.segments });
       broadcast({ type: 'live-segment', meetingId: s.id, segment });
+      handleCopilot(s, segment); // fire-and-forget, không chặn pipeline (FR-038)
     })
     .catch((e) => console.error('[live-segment]', e));
 }
@@ -431,6 +456,40 @@ async function reprocess(meetingId, model) {
     broadcast({ type: 'pipeline-status', meetingId, status: 'error', error: e.message });
   } finally {
     busyReprocess = false;
+  }
+}
+
+// -------------------------------------------------- Copilot (spec 003 US2)
+
+// Câu hỏi của "Đối phương" → thẻ trả lời 2 tầng: trích đoạn (tức thời) + câu đề xuất
+// grounded từ Gemini Nano (không đủ căn cứ → im lặng/không hiển thị — D5, SC-016).
+// Nano chạy runtime riêng, không đụng mutex Whisper (FR-038).
+async function handleCopilot(s, segment) {
+  try {
+    if (!s.copilotIndex || segment.speaker !== 'them' || !isQuestion(segment.text)) return;
+
+    const hits = search(s.copilotIndex, [segment.text, segment.translation], { k: 3 });
+    if (!hits.length) return; // dưới ngưỡng tin cậy → im lặng (FR-034)
+
+    const excerpts = hits.map((h) => ({
+      text: h.chunk.text.length > 320 ? h.chunk.text.slice(0, 320) + '…' : h.chunk.text,
+      docTitle: h.chunk.docTitle,
+      score: Math.round(h.score * 10) / 10,
+    }));
+    const card = { qT0: segment.t0, question: segment.text, excerpts };
+    broadcast({ type: 'answer-card', meetingId: s.id, card });
+
+    // tầng 2: câu đề xuất grounded (bất đồng bộ, có timeout trong prompter)
+    const suggestion = await synthesizeAnswer({
+      question: segment.text,
+      excerpts,
+      targetLang: s.cfg.targetLang || 'vi',
+    });
+    if (suggestion && session === s && !s.stopped) {
+      broadcast({ type: 'answer-card', meetingId: s.id, card: { ...card, suggestion } });
+    }
+  } catch (e) {
+    console.error('[copilot]', e);
   }
 }
 

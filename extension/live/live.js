@@ -32,7 +32,9 @@ async function init() {
   }
 
   chrome.runtime.onMessage.addListener((msg) => {
-    if (msg.type === 'live-segment' && (!meetingId || msg.meetingId === meetingId)) {
+    if (msg.type === 'answer-card' && (!meetingId || msg.meetingId === meetingId)) {
+      renderCard(msg.card);
+    } else if (msg.type === 'live-segment' && (!meetingId || msg.meetingId === meetingId)) {
       meetingId = msg.meetingId;
       renderSegment(msg.segment);
     } else if (msg.type === 'live-partial' && (!meetingId || msg.meetingId === meetingId)) {
@@ -103,4 +105,23 @@ function showNotice(text) {
   const el = document.getElementById('notice');
   el.textContent = text;
   el.hidden = false;
+}
+
+// spec 003: thẻ trả lời từ tài liệu trong cửa sổ live (fallback của overlay)
+let cardEl = null;
+function renderCard(card) {
+  if (!cardEl) {
+    cardEl = document.createElement('div');
+    cardEl.className = 'answer-card';
+    feed.parentNode.insertBefore(cardEl, feed.nextSibling);
+  }
+  cardEl.innerHTML = `<div class="q"></div><div class="exs"></div><div class="sug"></div>`;
+  cardEl.querySelector('.q').textContent = `❓ ${card.question}`;
+  const exs = cardEl.querySelector('.exs');
+  for (const ex of card.excerpts || []) {
+    const d = document.createElement('div');
+    d.textContent = `▸ ${ex.text} — ${ex.docTitle || ''}`;
+    exs.appendChild(d);
+  }
+  if (card.suggestion) cardEl.querySelector('.sug').textContent = `💡 ${card.suggestion.text}`;
 }

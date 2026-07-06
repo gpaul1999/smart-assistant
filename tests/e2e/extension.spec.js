@@ -332,6 +332,78 @@ test('viewer: panel Dữ liệu của bạn + xóa toàn bộ', async () => {
   await page.close();
 });
 
+test('docs page: tạo docset, thêm tài liệu (chunk sẵn), xóa docset', async () => {
+  const page = await context.newPage();
+  await page.goto(extUrl('docs/docs.html'));
+  await expect(page.locator('#pro-banner')).toBeVisible(); // chưa Pro → banner
+
+  await page.locator('#new-docset').fill('Khách ACME');
+  await page.locator('#add-docset').click();
+  await expect(page.locator('#docsets li')).toContainText('Khách ACME');
+  await expect(page.locator('#doc-pane')).toBeVisible();
+
+  await page.locator('#doc-title').fill('Hợp đồng 2026');
+  await page.locator('#doc-content').fill(
+    'Điều 5. Bảo hành: 24 tháng kể từ ngày nghiệm thu. '.repeat(60)
+  );
+  await page.locator('#add-doc').click();
+  const docLi = page.locator('#docs li').first();
+  await expect(docLi).toContainText('Hợp đồng 2026');
+  await expect(docLi).toContainText('đoạn'); // chunk đã tính sẵn
+
+  await page.screenshot({ path: join(ARTIFACTS, 'docs.png') });
+  page.on('dialog', (d) => d.accept());
+  await page.locator('#delete-docset').click();
+  await expect(page.locator('#docsets li')).toHaveCount(0);
+  await page.close();
+});
+
+test('overlay: answer-card render trích đoạn + câu đề xuất grounded', async () => {
+  const page = await context.newPage();
+  await page.goto(extUrl('viewer/viewer.html'));
+  await page.addScriptTag({ url: '/content/overlay.js' });
+  await page.waitForFunction(() => !!window.__smaOverlay);
+  await page.evaluate(() => {
+    window.__smaOverlay.renderCard({
+      qT0: 12,
+      question: 'Điều khoản bảo hành là gì?',
+      excerpts: [{ text: 'Bảo hành 24 tháng kể từ nghiệm thu.', docTitle: 'Hợp đồng ACME' }],
+      suggestion: { text: 'Sản phẩm được bảo hành 24 tháng kể từ ngày nghiệm thu [1].', citations: [1] },
+    });
+  });
+  const txt = await page.evaluate(
+    () => window.__smaOverlay.host.shadowRoot.querySelector('.cardbox').textContent
+  );
+  expect(txt).toContain('bảo hành là gì');
+  expect(txt).toContain('Hợp đồng ACME');
+  expect(txt).toContain('bảo hành 24 tháng kể từ ngày nghiệm thu [1]');
+  await page.screenshot({ path: join(ARTIFACTS, 'answer-card.png') });
+  await page.close();
+});
+
+test('popup: có select Copilot tài liệu + viewer có nút rà soát (gate Pro)', async () => {
+  const page = await context.newPage();
+  await page.goto(extUrl('popup/popup.html'));
+  await page.locator('details summary').click();
+  await expect(page.locator('#copilot-docset')).toBeVisible();
+
+  await page.goto(extUrl('viewer/viewer.html'));
+  await page.evaluate(async () => {
+    const db = await import('/lib/db.js');
+    await db.putMeeting({ id: 'rv-1', title: 'PV', startedAt: 1, status: 'done', segments: [] });
+  });
+  await page.reload();
+  await page.locator('#list li', { hasText: 'PV' }).click();
+  page.on('dialog', (d) => d.accept());
+  await page.locator('#d-review').click(); // chưa Pro → alert gate, không crash
+  await expect(page.locator('#d-review-box')).toBeHidden();
+  await page.evaluate(async () => {
+    const db = await import('/lib/db.js');
+    await db.deleteMeeting('rv-1');
+  });
+  await page.close();
+});
+
 test('trang cấp quyền mic render đúng', async () => {
   const page = await context.newPage();
   await page.goto(extUrl('permission/permission.html'));

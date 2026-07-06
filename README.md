@@ -29,7 +29,8 @@ bạn chọn, và tóm tắt các điểm chính sau khi kết thúc.
 | ✨ Tóm tắt | Chrome **Summarizer API** (on-device); không có thì fallback extractive thuần JS (vi+en) |
 | ✅ Action items | Tự nhặt các câu dạng "cần/sẽ làm/deadline/follow up…" (vi+en) |
 | 📚 Thư viện | Nghe lại audio, đọc transcript + bản dịch, sửa tiêu đề, xuất Markdown/JSON/audio, xóa |
-| 🔁 Phiên âm lại | Chạy lại từ audio đã lưu bằng model chính xác hơn (Whisper Base/Small) |
+| 🔁 Phiên âm lại | Chạy lại từ audio đã lưu bằng model chính xác hơn (Whisper Base/Small — Small là Pro) |
+| 📄 Copilot tài liệu ⭐ | (Pro) Dán hợp đồng/spec/CV-JD vào kho local; câu hỏi vang lên → trích đoạn khớp + câu trả lời đề xuất **có trích dẫn, không bịa** (Gemini Nano on-device); rà soát hỏi–đáp sau buổi |
 
 ## Cài đặt (dev)
 

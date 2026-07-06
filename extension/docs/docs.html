@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="vi">
+  <head>
+    <meta charset="utf-8" />
+    <title>Kho tài liệu — Smart Meeting Assistant</title>
+    <link rel="stylesheet" href="docs.css" />
+  </head>
+  <body>
+    <main>
+      <header>
+        <h1>📄 Kho tài liệu tham chiếu</h1>
+        <p class="note">
+          Dán tài liệu bạn sẽ bị hỏi đến (hợp đồng, spec, CV/JD, ghi chú…). Khi câu hỏi vang
+          lên trong cuộc họp, Copilot hiện trích đoạn khớp + câu trả lời đề xuất
+          <strong>chỉ từ tài liệu này</strong>. Tất cả nằm trên máy bạn.
+        </p>
+        <p id="pro-banner" class="banner" hidden>
+          ⭐ Copilot là tính năng Pro — bạn vẫn soạn kho tài liệu được, nhưng cần license key
+          (popup → Nâng cao) để thẻ trả lời chạy trong cuộc họp.
+        </p>
+      </header>
+
+      <section class="row-2">
+        <div>
+          <h2>Bộ tài liệu</h2>
+          <ul id="docsets"></ul>
+          <div class="add-row">
+            <input id="new-docset" placeholder="Tên bộ mới (vd: Khách ACME, Phỏng vấn X)" />
+            <button id="add-docset">＋ Tạo</button>
+          </div>
+        </div>
+
+        <div id="doc-pane" hidden>
+          <h2 id="docset-title"></h2>
+          <ul id="docs"></ul>
+          <div class="add-doc">
+            <input id="doc-title" placeholder="Tiêu đề tài liệu (vd: Hợp đồng 2026)" />
+            <textarea id="doc-content" rows="10" placeholder="Dán nội dung văn bản vào đây…"></textarea>
+            <button id="add-doc">＋ Thêm tài liệu</button>
+          </div>
+          <button id="delete-docset" class="danger">🗑 Xóa bộ tài liệu này</button>
+        </div>
+      </section>
+    </main>
+    <script type="module" src="docs.js"></script>
+  </body>
+</html>

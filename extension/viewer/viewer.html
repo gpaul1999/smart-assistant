@@ -56,6 +56,11 @@
         </div>
       </section>
 
+      <section id="d-review-box" hidden>
+        <h2>🧠 Rà soát theo tài liệu <span id="d-review-status" class="chip"></span></h2>
+        <div id="d-review-items"></div>
+      </section>
+
       <section>
         <h2>📝 Transcript
           <label class="small"><input type="checkbox" id="d-show-trans" checked /> hiện bản dịch</label>
@@ -72,6 +77,7 @@
           <option value="Xenova/whisper-small">Whisper Small (chính xác)</option>
         </select>
         <button id="d-retranscribe">🔁 Phiên âm lại</button>
+        <button id="d-review">🧠 Rà soát phỏng vấn ⭐</button>
         <button id="d-delete" class="danger">🗑 Xóa</button>
       </footer>
     </main>

@@ -3,7 +3,7 @@
 // để listMeetings không phải load blob nặng). Store 'audio_chunks' (v2): chunk 5s đang ghi,
 // persist ngay để sống sót crash (spec 001 FR-016); dọn sau khi phiên chốt thành công.
 const DB_NAME = 'smart-assistant';
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 
 function req(r) {
   return new Promise((resolve, reject) => {
@@ -25,6 +25,13 @@ export function openDb() {
       }
       if (!db.objectStoreNames.contains('audio_chunks')) {
         db.createObjectStore('audio_chunks', { keyPath: ['meetingId', 'seq'] });
+      }
+      // v3 (spec 003): kho tài liệu tham chiếu cho Copilot
+      if (!db.objectStoreNames.contains('docsets')) {
+        db.createObjectStore('docsets', { keyPath: 'id' });
+      }
+      if (!db.objectStoreNames.contains('docs')) {
+        db.createObjectStore('docs', { keyPath: 'id' });
       }
     };
     r.onsuccess = () => resolve(r.result);
@@ -100,4 +107,34 @@ export function deleteAudioChunks(meetingId) {
 export async function listRecordingMeetings() {
   const all = await withStore('meetings', 'readonly', (s) => req(s.getAll()));
   return all.filter((m) => m.status === 'recording');
+}
+
+// ---- kho tài liệu Copilot (spec 003 FR-031) ----
+
+export function putDocSet(docset) {
+  return withStore('docsets', 'readwrite', (s) => req(s.put(docset)));
+}
+
+export async function listDocSets() {
+  const all = await withStore('docsets', 'readonly', (s) => req(s.getAll()));
+  return all.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+}
+
+export function putDoc(doc) {
+  return withStore('docs', 'readwrite', (s) => req(s.put(doc)));
+}
+
+export async function listDocs(docsetId) {
+  const all = await withStore('docs', 'readonly', (s) => req(s.getAll()));
+  return all.filter((d) => d.docsetId === docsetId);
+}
+
+export function deleteDoc(id) {
+  return withStore('docs', 'readwrite', (s) => req(s.delete(id)));
+}
+
+/** Xóa docset + toàn bộ docs thuộc nó (xóa là xóa thật — FR-031). */
+export async function deleteDocSet(id) {
+  await withStore('docsets', 'readwrite', (s) => req(s.delete(id)));
+  for (const d of await listDocs(id)) await deleteDoc(d.id);
 }

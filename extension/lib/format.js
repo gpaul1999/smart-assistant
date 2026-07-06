@@ -54,6 +54,18 @@ export function buildMarkdown(meeting) {
     lines.push('');
   }
 
+  if (meeting.review?.length) {
+    lines.push('## Rà soát theo tài liệu');
+    lines.push('');
+    for (const r of meeting.review) {
+      lines.push(`### ❓ ${r.question}`);
+      lines.push('');
+      lines.push(`- **Bạn trả lời**: ${r.answerText || '(không trả lời)'}`);
+      lines.push(`- **Đối chiếu**: ${r.verdict}`);
+      lines.push('');
+    }
+  }
+
   if (meeting.segments?.length) {
     lines.push('## Transcript');
     lines.push('');

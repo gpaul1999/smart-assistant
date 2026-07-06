@@ -38,3 +38,11 @@ footer {
   padding: 8px 14px; border-top: 1px solid #2a3138; font-size: 12px; opacity: 0.8;
 }
 #model-progress { font-variant-numeric: tabular-nums; }
+
+.answer-card {
+  margin: 0 14px 10px; padding: 10px 12px; border-radius: 10px;
+  background: rgba(37, 99, 235, .16); border: 1px solid rgba(37, 99, 235, .4);
+  font-size: 13px;
+}
+.answer-card .q { opacity: .7; font-size: 11px; margin-bottom: 4px; }
+.answer-card .sug { color: #9be8a8; font-weight: 600; margin-top: 6px; }

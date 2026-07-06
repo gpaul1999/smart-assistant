@@ -1,5 +1,26 @@
 # DEVLOG — smart-assistant
 
+## 2026-07-06 — Implement spec 003: Copilot trả lời từ tài liệu (Pro) — 12/13 task
+
+- **DB v3**: stores `docsets`/`docs`; chunk tính sẵn lúc lưu tài liệu (trang `docs/`).
+- **`lib/retrieval.js`**: chunk ~1200 ký tự chồng lấn 200 + BM25 (k1=1.5, b=0.75);
+  xuyên ngôn ngữ bằng query kép (câu hỏi gốc + bản dịch có sẵn từ pipeline); ngưỡng điểm
+  → câu hỏi ngoài tài liệu im lặng. Test: tìm đúng điều khoản hợp đồng vi, spec en.
+- **`lib/question.js`**: isQuestion vi/en (dấu ?, từ nghi vấn, đuôi câu vi) + `pairQA`
+  ghép hỏi–đáp cho rà soát.
+- **`lib/prompter.js`** (Prompt API/Gemini Nano): prompt grounded-only với sentinel
+  KHONG_DU_CAN_CU; `parseAnswer` TỪ CHỐI output không có citation [n] (D5/SC-016 — cấm
+  bịa được enforce bằng parse, không chỉ bằng prompt); timeout mọi call.
+- **Flow offscreen**: câu chốt của "Đối phương" là câu hỏi → search index (nạp lúc bắt
+  đầu phiên) → broadcast `answer-card` (trích đoạn, tức thời) → Nano tổng hợp → update
+  card kèm 💡; Nano chạy runtime riêng, không đụng mutex Whisper (FR-038/SC-017).
+- **Gate Pro ở background** (FR-037): chỉ đưa cfg copilot vào offscreen-start khi license
+  verify + đã chọn docset. Overlay + cửa sổ live render card; viewer có "Rà soát phỏng
+  vấn" (pairQA → đối chiếu KHOP/LECH/THIEU) lưu vào meeting.review + export Markdown.
+- **DEFER**: US4 mock interview (P3) — chờ tín hiệu demand thật (D1). Manifest 0.4.0.
+
+Gate: **64 unit + 19 E2E xanh**. Manual N–R trong quickstart 003 (cần Nano + máy thật).
+
 ## 2026-07-06 — Implement spec 002: interview-first UX (23/23 task, 2 task có ghi chú)
 
 - **Onboarding 3 bước** tự mở sau cài (mic + notice pháp lý → ngôn ngữ → "nói thử một

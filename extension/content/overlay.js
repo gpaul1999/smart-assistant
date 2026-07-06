@@ -39,6 +39,16 @@
       .trans { color: #9be8a8; font-weight: 600; }
       .interim { opacity: .55; font-style: italic; }
       .tag { color: #ffd479; }
+      .card {
+        margin-top: 8px; padding: 8px 10px; border-radius: 10px;
+        background: rgba(37, 99, 235, .18); border: 1px solid rgba(37, 99, 235, .45);
+        font-size: calc(var(--fs, 17px) * .82);
+      }
+      .card .q { opacity: .75; font-size: 11px; margin-bottom: 4px; }
+      .card .ex { margin: 3px 0; opacity: .9; }
+      .card .src { opacity: .55; font-size: 10px; }
+      .card .sug { margin-top: 6px; color: #9be8a8; font-weight: 600; }
+      .card .hide { all: unset; cursor: pointer; float: right; opacity: .6; }
     </style>
     <div class="box" part="box">
       <div class="bar">
@@ -49,6 +59,7 @@
         <button class="close">✕</button>
       </div>
       <div class="lines"></div>
+      <div class="cardbox"></div>
     </div>`;
   document.documentElement.appendChild(host);
 
@@ -145,9 +156,44 @@
     lines.appendChild(finals[finals.length - 1]);
   }
 
+  // spec 003: thẻ trả lời từ tài liệu — trích đoạn tức thời, câu đề xuất grounded theo sau
+  const cardbox = shadow.querySelector('.cardbox');
+  function renderCard(card) {
+    cardbox.innerHTML = '';
+    const div = document.createElement('div');
+    div.className = 'card';
+    const hide = document.createElement('button');
+    hide.className = 'hide';
+    hide.textContent = '✕';
+    hide.addEventListener('click', () => cardbox.replaceChildren());
+    div.appendChild(hide);
+    const q = document.createElement('div');
+    q.className = 'q';
+    q.textContent = `❓ ${card.question}`;
+    div.appendChild(q);
+    for (const ex of card.excerpts || []) {
+      const e = document.createElement('div');
+      e.className = 'ex';
+      e.textContent = `▸ ${ex.text}`;
+      const src = document.createElement('span');
+      src.className = 'src';
+      src.textContent = `  — ${ex.docTitle || ''}`;
+      e.appendChild(src);
+      div.appendChild(e);
+    }
+    if (card.suggestion) {
+      const sg = document.createElement('div');
+      sg.className = 'sug';
+      sg.textContent = `💡 ${card.suggestion.text}`;
+      div.appendChild(sg);
+    }
+    cardbox.appendChild(div);
+  }
+
   chrome.runtime.onMessage.addListener((msg) => {
     if (msg.type === 'live-partial') renderPartial(msg.partial);
     else if (msg.type === 'live-segment') renderSegment(msg.segment);
+    else if (msg.type === 'answer-card') renderCard(msg.card);
     else if (msg.type === 'recording-stopped') setTimeout(() => host.remove(), 4000);
     else if (msg.type === 'overlay-init' && msg.ephemeral) {
       shadow.querySelector('.tag').textContent = `(${msgOf('ovlEphemeralTag', 'phiên không lưu')})`;
@@ -159,6 +205,7 @@
     show: () => document.documentElement.appendChild(host),
     renderPartial,
     renderSegment,
+    renderCard,
     host,
   };
 })();
