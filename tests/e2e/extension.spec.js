@@ -135,6 +135,111 @@ test('summarizer chạy được trong trang extension (ESM + fallback extractiv
   await page.close();
 });
 
+test('viewer: meeting gián đoạn (crash-recovery) hiện badge + quota bar hiển thị', async () => {
+  const page = await context.newPage();
+  await page.goto(extUrl('viewer/viewer.html'));
+  await page.evaluate(async () => {
+    const db = await import('/lib/db.js');
+    await db.putMeeting({
+      id: 'e2e-interrupted',
+      title: 'Họp bị sập giữa chừng',
+      startedAt: Date.now() - 7200_000,
+      durationMs: 65_000,
+      audioBytes: 512_000,
+      status: 'interrupted',
+      segments: [{ t0: 0, t1: 5, speaker: 'them', text: 'Nội dung trước khi sập' }],
+    });
+  });
+  await page.reload();
+
+  const item = page.locator('#list li', { hasText: 'Họp bị sập giữa chừng' });
+  await expect(item).toContainText('gián đoạn');
+  await expect(item).toContainText('500 KB'); // audioBytes hiển thị
+  await expect(page.locator('#quota-box')).toBeVisible(); // FR-019
+  await expect(page.locator('#quota-text')).toContainText('/');
+  await page.screenshot({ path: join(ARTIFACTS, 'viewer-interrupted.png') });
+  await page.close();
+});
+
+test('deleteMeeting dọn cả 3 store (meetings, audio, audio_chunks)', async () => {
+  const page = await context.newPage();
+  await page.goto(extUrl('viewer/viewer.html'));
+  const leftovers = await page.evaluate(async () => {
+    const db = await import('/lib/db.js');
+    await db.putMeeting({ id: 'e2e-del', title: 'Sắp xóa', startedAt: 1, status: 'done' });
+    await db.saveAudio('e2e-del', new Blob(['x']), 'audio/webm');
+    await db.putAudioChunk('e2e-del', 0, new Blob(['chunk']));
+    await db.deleteMeeting('e2e-del');
+    return {
+      meeting: await db.getMeeting('e2e-del'),
+      audio: await db.getAudio('e2e-del'),
+      chunks: (await db.getAudioChunks('e2e-del')).length,
+    };
+  });
+  expect(leftovers.meeting).toBeFalsy();
+  expect(leftovers.audio).toBeFalsy();
+  expect(leftovers.chunks).toBe(0);
+  await page.close();
+});
+
+test('recovery: meeting recording mồ côi + chunks → interrupted với audio ghép', async () => {
+  const page = await context.newPage();
+  await page.goto(extUrl('viewer/viewer.html'));
+  const out = await page.evaluate(async () => {
+    const db = await import('/lib/db.js');
+    const { recoverInterrupted } = await import('/lib/recovery.js');
+    await db.putMeeting({
+      id: 'e2e-crash',
+      title: 'Đang ghi thì sập',
+      startedAt: Date.now(),
+      status: 'recording',
+      segments: [{ t0: 0, t1: 8, speaker: 'me', text: 'câu đã chốt' }],
+    });
+    await db.putAudioChunk('e2e-crash', 0, new Blob(['head']));
+    await db.putAudioChunk('e2e-crash', 1, new Blob(['tail']));
+    const recovered = await recoverInterrupted(db);
+    const m = await db.getMeeting('e2e-crash');
+    const audio = await db.getAudio('e2e-crash');
+    const result = {
+      recovered,
+      status: m.status,
+      durationMs: m.durationMs,
+      audioText: audio ? await audio.blob.text() : null,
+      chunksLeft: (await db.getAudioChunks('e2e-crash')).length,
+    };
+    await db.deleteMeeting('e2e-crash');
+    return result;
+  });
+  expect(out.recovered).toContain('e2e-crash');
+  expect(out.status).toBe('interrupted');
+  expect(out.durationMs).toBe(10_000); // 2 chunk × 5s > câu chốt cuối 8s
+  expect(out.audioText).toBe('headtail');
+  expect(out.chunksLeft).toBe(0);
+  await page.close();
+});
+
+test('popup: có nút chuẩn bị model + dòng lưu trữ (FR-018/FR-019)', async () => {
+  const page = await context.newPage();
+  await page.goto(extUrl('popup/popup.html'));
+  await expect(page.locator('#quota')).not.toHaveText('…');
+  await page.locator('details summary').click();
+  await expect(page.locator('#prepare-model')).toBeVisible();
+  await page.screenshot({ path: join(ARTIFACTS, 'popup-advanced.png') });
+  await page.close();
+});
+
+test('webm-opus demuxer chạy được trong trang extension (ESM)', async () => {
+  const page = await context.newPage();
+  await page.goto(extUrl('viewer/viewer.html'));
+  const ok = await page.evaluate(async () => {
+    const { demuxWebmOpus } = await import('/lib/webm-opus.js');
+    const out = demuxWebmOpus(new Uint8Array([0, 1, 2]));
+    return Array.isArray(out.packets);
+  });
+  expect(ok).toBe(true);
+  await page.close();
+});
+
 test('trang cấp quyền mic render đúng', async () => {
   const page = await context.newPage();
   await page.goto(extUrl('permission/permission.html'));

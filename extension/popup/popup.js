@@ -1,3 +1,5 @@
+import { assess, fmtBytes } from '../lib/storage-policy.js';
+
 const $ = (id) => document.getElementById(id);
 
 const DEFAULT_SETTINGS = {
@@ -10,14 +12,28 @@ const DEFAULT_SETTINGS = {
 
 let currentTab = null;
 let timerId = null;
+let quotaCritical = false;
 
 init();
 
 async function init() {
   await loadSettings();
+  await refreshQuota();
   await refreshTab();
   await refreshMicStatus();
   await refreshRecordingState();
+
+  $('prepare-model').addEventListener('click', async () => {
+    $('model-progress').textContent = 'đang chuẩn bị…';
+    await chrome.runtime.sendMessage({ type: 'prepare-model', model: $('live-model').value });
+  });
+
+  // Chống trình duyệt tự dọn IndexedDB khi thiếu chỗ (FR-019) — xin một lần
+  const { persistAsked } = await chrome.storage.local.get('persistAsked');
+  if (!persistAsked && navigator.storage?.persist) {
+    navigator.storage.persist().catch(() => {});
+    await chrome.storage.local.set({ persistAsked: true });
+  }
 
   $('toggle').addEventListener('click', onToggle);
   $('open-viewer').addEventListener('click', () =>
@@ -40,7 +56,29 @@ async function init() {
     if (['recording-started', 'recording-stopped', 'pipeline-status', 'recording-error'].includes(msg.type)) {
       refreshRecordingState();
     }
+    if (msg.type === 'model-progress' && msg.progress != null) {
+      $('model-progress').textContent =
+        msg.progress >= 100 ? '✔ sẵn sàng' : `${Math.round(msg.progress)}%`;
+    }
   });
+}
+
+// FR-019: hiển thị mức dùng lưu trữ; critical → chặn phiên ghi mới
+async function refreshQuota() {
+  const el = $('quota');
+  if (!navigator.storage?.estimate) {
+    el.textContent = 'không kiểm tra được';
+    return;
+  }
+  const { usage, quota } = await navigator.storage.estimate();
+  const { level, remainingHours } = assess({ usage, quota });
+  quotaCritical = level === 'critical';
+  const hours = remainingHours == null ? '' : ` · còn ~${Math.floor(remainingHours)}h ghi âm`;
+  el.textContent = `${fmtBytes(usage)} / ${fmtBytes(quota)}${hours}`;
+  el.className = `value ${level === 'critical' ? 'warn' : level === 'warn' ? 'warn' : ''}`;
+  if (quotaCritical) {
+    showError('Bộ nhớ trình duyệt sắp đầy — hãy mở Thư viện để xóa/xuất bớt cuộc họp cũ trước khi ghi mới.');
+  }
 }
 
 async function loadSettings() {
@@ -72,7 +110,7 @@ async function refreshTab() {
     showError('Tab này không ghi âm được — hãy mở tab cuộc họp (Google Meet, Zoom web…) rồi bấm lại icon extension.');
     $('toggle').disabled = true;
   } else {
-    $('toggle').disabled = false;
+    $('toggle').disabled = quotaCritical; // FR-019: hết chỗ → không cho ghi mới
   }
 }
 

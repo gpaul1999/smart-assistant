@@ -1,5 +1,31 @@
 # DEVLOG — smart-assistant
 
+## 2026-07-06 — Implement spec 001: độ bền (crash-safe, phiên 3h, model UX, quota)
+
+Thực thi 23/26 task của `specs/001-meeting-assistant-core/tasks.md` (còn T008/T024-một-phần/
+T026-phần-manual là việc đo thủ công của chủ dự án). Điểm kỹ thuật chính:
+
+- **IndexedDB v2**: store `audio_chunks` (keyPath `[meetingId, seq]`); chunk 5s persist
+  ngay trong `ondataavailable`, RAM không giữ audio nữa; dừng bình thường → ghép + dọn.
+- **Recovery** (`lib/recovery.js`, thuần): meeting `recording` mồ côi → ghép prefix chunk
+  (seq liên tục từ 0, thiếu thì cắt), status `interrupted`, chạy idempotent mỗi lần service
+  worker khởi động lạnh.
+- **Demuxer `lib/webm-opus.js`** (~200 dòng, 0 dependency): parse EBML đường-đi-hẹp cho
+  WebM của Chrome MediaRecorder; chịu file cụt đuôi (chính là file recovery). Fixture test
+  sinh bằng CHÍNH MediaRecorder của Chromium (`scripts/make-fixture.mjs`, 32KB, commit kèm).
+- **Re-transcribe streaming**: WebCodecs `AudioDecoder` decode Opus theo cửa sổ 10' (+5s
+  chồng lấn, bỏ chunk trùng ở biên), downsample 48k→16k, đỉnh RAM ≈ 1 cửa sổ; file <30'
+  hoặc thiếu WebCodecs → `decodeAudioData` như cũ; broadcast progress % lên viewer.
+- **`labelSpeaker` tách về `lib/segmenter.js`** + harness SC-008: hội thoại tổng hợp có
+  leak 20% biên độ → accuracy 100% (ngưỡng fail <90%).
+- **Quota** (`lib/storage-policy.js`): ok/warn(70%)/critical(90%) + "còn ~Xh ghi âm"
+  (30MB/h); popup chặn ghi khi critical, `navigator.storage.persist()` một lần; quota bar
+  cả popup lẫn viewer, dung lượng từng phiên (`audioBytes`).
+- **FR-020**: `track.onended` của tab stream → `stopRecording()` (tái dùng luồng chuẩn).
+
+Gate: **41 unit + 12 E2E xanh**. Việc còn cho chủ dự án: đo SC-004 (60s cho phiên 60'),
+kịch bản B quickstart (giám sát network SC-003) và C/D thủ công trên máy thật.
+
 ## 2026-07-05 — Office hours: phản biện sản phẩm (gstack methodology)
 
 Chạy phương pháp `/office-hours` (gstack, fork pin `11de390` — clone dùng trực tiếp, không

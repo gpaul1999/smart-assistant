@@ -1,5 +1,6 @@
 import { listMeetings, getMeeting, patchMeeting, deleteMeeting, getAudio } from '../lib/db.js';
 import { secToClock, fmtDate, buildMarkdown, SPEAKER_LABELS } from '../lib/format.js';
+import { assess, fmtBytes } from '../lib/storage-policy.js';
 
 const $ = (id) => document.getElementById(id);
 const STATUS_LABELS = {
@@ -8,6 +9,7 @@ const STATUS_LABELS = {
   summarizing: 'đang tóm tắt',
   done: 'hoàn tất',
   error: 'lỗi',
+  interrupted: 'gián đoạn',
 };
 
 let currentId = null;
@@ -17,6 +19,7 @@ init();
 
 async function init() {
   await renderList();
+  await renderQuota();
 
   $('d-show-trans').addEventListener('change', (e) =>
     document.body.classList.toggle('hide-trans', !e.target.checked)
@@ -54,11 +57,34 @@ async function init() {
   });
 
   chrome.runtime.onMessage.addListener(async (msg) => {
+    // Tiến độ re-transcribe (FR-017) + tải model (FR-018) — cập nhật nhẹ, không reload
+    if (msg.type === 'pipeline-status' && msg.progress != null && msg.meetingId === currentId) {
+      $('d-progress').textContent = msg.progress < 100 ? `${msg.progress}%` : '';
+    }
+    if (msg.type === 'model-progress' && msg.progress != null) {
+      $('d-progress').textContent =
+        msg.progress < 100 ? `tải model ${Math.round(msg.progress)}%` : '';
+    }
     if (['pipeline-status', 'recording-stopped', 'live-segment'].includes(msg.type)) {
       await renderList();
       if (msg.meetingId === currentId) await openMeeting(currentId, { keepAudio: msg.type === 'live-segment' });
+      if (msg.type === 'pipeline-status' && msg.status === 'done') await renderQuota();
     }
   });
+}
+
+// FR-019: quota bar trong thư viện
+async function renderQuota() {
+  if (!navigator.storage?.estimate) return;
+  const { usage, quota } = await navigator.storage.estimate();
+  const { level, ratio, remainingHours } = assess({ usage, quota });
+  if (level === 'unknown') return;
+  $('quota-box').hidden = false;
+  const fill = $('quota-fill');
+  fill.style.width = `${Math.round(ratio * 100)}%`;
+  fill.className = level === 'ok' ? '' : level;
+  const hours = remainingHours == null ? '' : ` · còn ~${Math.floor(remainingHours)}h ghi âm`;
+  $('quota-text').textContent = `${fmtBytes(usage)} / ${fmtBytes(quota)}${hours}`;
 }
 
 async function renderList() {
@@ -70,9 +96,10 @@ async function renderList() {
     const li = document.createElement('li');
     li.className = m.id === currentId ? 'active' : '';
     const dur = m.durationMs ? secToClock(m.durationMs / 1000) : '';
+    const size = m.audioBytes ? fmtBytes(m.audioBytes) : '';
     li.innerHTML = `
       <div class="t"></div>
-      <div class="m"><span>${fmtDate(m.startedAt)}</span><span>${dur}</span>
+      <div class="m"><span>${fmtDate(m.startedAt)}</span><span>${dur}</span><span>${size}</span>
         <span class="chip status-${m.status}">${STATUS_LABELS[m.status] || m.status || ''}</span></div>`;
     li.querySelector('.t').textContent = m.title || 'Cuộc họp';
     li.addEventListener('click', () => openMeeting(m.id));

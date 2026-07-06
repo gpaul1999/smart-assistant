@@ -9,6 +9,10 @@ import {
   deleteMeeting,
   saveAudio,
   getAudio,
+  putAudioChunk,
+  getAudioChunks,
+  deleteAudioChunks,
+  listRecordingMeetings,
 } from '../../extension/lib/db.js';
 
 before(async () => {
@@ -51,8 +55,34 @@ test('saveAudio/getAudio round-trip', async () => {
   assert.equal(await rec.blob.text(), 'xin chào');
 });
 
-test('deleteMeeting xóa cả meeting lẫn audio', async () => {
+test('audio chunks: put/get theo seq tăng dần, xóa theo meetingId', async () => {
+  await putAudioChunk('a', 1, new Blob(['b'])); // cố tình put lệch thứ tự
+  await putAudioChunk('a', 0, new Blob(['a']));
+  await putAudioChunk('a', 2, new Blob(['c']));
+  await putAudioChunk('khac', 0, new Blob(['x']));
+  const chunks = await getAudioChunks('a');
+  assert.deepEqual(chunks.map((c) => c.seq), [0, 1, 2]);
+  assert.equal(await (new Blob(chunks.map((c) => c.data))).text(), 'abc');
+
+  await deleteAudioChunks('a');
+  assert.equal((await getAudioChunks('a')).length, 0);
+  assert.equal((await getAudioChunks('khac')).length, 1, 'không đụng meeting khác');
+});
+
+test('listRecordingMeetings chỉ trả meeting đang recording', async () => {
+  await putMeeting({ id: 'rec1', status: 'recording', startedAt: 1 });
+  await putMeeting({ id: 'done1', status: 'done', startedAt: 2 });
+  const recs = await listRecordingMeetings();
+  assert.ok(recs.some((m) => m.id === 'rec1'));
+  assert.ok(!recs.some((m) => m.id === 'done1'));
+  await deleteMeeting('rec1');
+  await deleteMeeting('done1');
+});
+
+test('deleteMeeting xóa cả meeting, audio lẫn chunks', async () => {
+  await putAudioChunk('a', 0, new Blob(['z']));
   await deleteMeeting('a');
   assert.equal(await getMeeting('a'), undefined);
   assert.equal(await getAudio('a'), undefined);
+  assert.equal((await getAudioChunks('a')).length, 0);
 });

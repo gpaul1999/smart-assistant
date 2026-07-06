@@ -26,6 +26,15 @@ aside h1 { font-size: 17px; margin: 0 0 2px; }
 #list .m { font-size: 11px; opacity: 0.6; display: flex; gap: 6px; align-items: center; }
 .empty { opacity: 0.6; text-align: center; margin-top: 40px; }
 
+.quota { margin: 8px 0 4px; }
+.quota-bar {
+  height: 6px; border-radius: 4px; overflow: hidden;
+  background: color-mix(in srgb, currentColor 12%, transparent);
+}
+.quota-bar span { display: block; height: 100%; background: var(--accent); width: 0; }
+.quota-bar span.warn { background: #d97706; }
+.quota-bar span.critical { background: var(--danger); }
+
 main { flex: 1; overflow-y: auto; padding: 20px 28px; }
 .placeholder { display: flex; align-items: center; justify-content: center; opacity: 0.4; }
 
@@ -42,6 +51,7 @@ main { flex: 1; overflow-y: auto; padding: 20px 28px; }
 }
 .chip.status-recording { background: color-mix(in srgb, var(--danger) 18%, transparent); }
 .chip.status-error { background: color-mix(in srgb, var(--danger) 18%, transparent); }
+.chip.status-interrupted { background: color-mix(in srgb, #d97706 22%, transparent); }
 
 audio { width: 100%; margin-bottom: 14px; }
 h2 { font-size: 15px; margin: 18px 0 8px; }

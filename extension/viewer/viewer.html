@@ -10,6 +10,10 @@
       <header>
         <h1>📚 Thư viện cuộc họp</h1>
         <p class="note">Toàn bộ dữ liệu nằm trong trình duyệt của bạn</p>
+        <div id="quota-box" class="quota" hidden>
+          <div class="quota-bar"><span id="quota-fill"></span></div>
+          <span id="quota-text" class="note"></span>
+        </div>
       </header>
       <ul id="list"></ul>
       <p id="empty" class="empty" hidden>
@@ -23,6 +27,7 @@
         <div class="meta-line">
           <span id="d-date"></span> · <span id="d-duration"></span> ·
           <span id="d-status" class="chip"></span>
+          <span id="d-progress" class="note"></span>
         </div>
       </header>
 

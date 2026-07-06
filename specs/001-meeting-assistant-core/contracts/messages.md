@@ -11,7 +11,8 @@ và các test liên quan.
 | `start-recording` | popup → background | `tabId`, `tabTitle` | Từ chối khi đã có phiên (FR-005) hoặc quota `critical` (FR-019) |
 | `stop-recording` | popup/live → background → offscreen | — | |
 | `reprocess` | viewer → background → offscreen | `meetingId`, `model` | FR-013/FR-017 |
-| `prepare-model` | popup → background → offscreen | `model` | MỚI (FR-018): tải model trước |
+| `prepare-model` | popup → background | `model` | FR-018: tải model trước; background forward thành `offscreen-prepare-model` |
+| `offscreen-prepare-model` | background → offscreen | `model` | vì `chrome.runtime.sendMessage` broadcast tới mọi trang, offscreen chỉ nhận type có prefix `offscreen-` |
 | `offscreen-start` | background → offscreen | `streamId`, `settings`, `meta{title, tabId}` | |
 | `offscreen-stop` | background → offscreen | — | |
 | `offscreen-reprocess` | background → offscreen | `meetingId`, `model` | |

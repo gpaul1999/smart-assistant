@@ -16,6 +16,17 @@ export function mixdown(mic, tab) {
   return out;
 }
 
+/**
+ * Gán nhãn người nói cho một đoạn theo năng lượng từng nguồn (heuristic RMS, SC-008).
+ * @returns {'me'|'them'|'both'|null} null = im lặng (bỏ đoạn)
+ */
+export function labelSpeaker(rmsMic, rmsTab, { ratio = 1.4, floor = 0.004 } = {}) {
+  if (Math.max(rmsMic, rmsTab) < floor) return null;
+  if (rmsMic > rmsTab * ratio) return 'me';
+  if (rmsTab > rmsMic * ratio) return 'them';
+  return 'both';
+}
+
 function concat(arrays, total) {
   const out = new Float32Array(total);
   let off = 0;

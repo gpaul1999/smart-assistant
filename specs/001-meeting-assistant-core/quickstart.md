@@ -60,6 +60,14 @@ Kỳ vọng: toàn bộ xanh. Harness nhãn người nói in accuracy — PHẢI
 
 Đang ghi → đóng tab họp → phiên tự chốt như bấm dừng: thư viện có mục hoàn chỉnh kèm tóm tắt.
 
+## Kết quả kiểm chứng
+
+| Ngày | Hạng mục | Kết quả |
+|---|---|---|
+| 2026-07-06 | Gate tự động (`npm test` + `npm run test:e2e`) | ✅ 41 unit + 12 E2E xanh; SC-008 harness accuracy 100% |
+| 2026-07-06 | Recovery (C, mức API — E2E seed chunks + recoverInterrupted) | ✅ interrupted + audio ghép đúng + chunks dọn |
+| — | A/B/C/D/E/F thủ công trên máy thật | ⏳ chờ chủ dự án chạy (cần mic/loa + mạng thật) |
+
 ## Tham chiếu
 
 - Yêu cầu & tiêu chí đo: [spec.md](spec.md) · Thiết kế dữ liệu: [data-model.md](data-model.md)

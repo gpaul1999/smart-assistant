@@ -1,8 +1,9 @@
 // IndexedDB wrapper — toàn bộ dữ liệu cuộc họp nằm local trong trình duyệt.
 // Store 'meetings': metadata + transcript + summary. Store 'audio': blob ghi âm (tách riêng
-// để listMeetings không phải load blob nặng).
+// để listMeetings không phải load blob nặng). Store 'audio_chunks' (v2): chunk 5s đang ghi,
+// persist ngay để sống sót crash (spec 001 FR-016); dọn sau khi phiên chốt thành công.
 const DB_NAME = 'smart-assistant';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 function req(r) {
   return new Promise((resolve, reject) => {
@@ -21,6 +22,9 @@ export function openDb() {
       }
       if (!db.objectStoreNames.contains('audio')) {
         db.createObjectStore('audio', { keyPath: 'id' });
+      }
+      if (!db.objectStoreNames.contains('audio_chunks')) {
+        db.createObjectStore('audio_chunks', { keyPath: ['meetingId', 'seq'] });
       }
     };
     r.onsuccess = () => resolve(r.result);
@@ -63,6 +67,7 @@ export async function patchMeeting(id, patch) {
 export async function deleteMeeting(id) {
   await withStore('meetings', 'readwrite', (s) => req(s.delete(id)));
   await withStore('audio', 'readwrite', (s) => req(s.delete(id)));
+  await deleteAudioChunks(id);
 }
 
 export function saveAudio(id, blob, mimeType) {
@@ -71,4 +76,28 @@ export function saveAudio(id, blob, mimeType) {
 
 export function getAudio(id) {
   return withStore('audio', 'readonly', (s) => req(s.get(id)));
+}
+
+// ---- audio_chunks (crash-safe recording, spec 001 FR-016) ----
+
+export function putAudioChunk(meetingId, seq, data) {
+  return withStore('audio_chunks', 'readwrite', (s) => req(s.put({ meetingId, seq, data })));
+}
+
+/** Chunks của một meeting, sắp theo seq tăng dần. */
+export async function getAudioChunks(meetingId) {
+  const range = IDBKeyRange.bound([meetingId, 0], [meetingId, Infinity]);
+  const rows = await withStore('audio_chunks', 'readonly', (s) => req(s.getAll(range)));
+  return rows.sort((a, b) => a.seq - b.seq);
+}
+
+export function deleteAudioChunks(meetingId) {
+  const range = IDBKeyRange.bound([meetingId, 0], [meetingId, Infinity]);
+  return withStore('audio_chunks', 'readwrite', (s) => req(s.delete(range)));
+}
+
+/** Meetings còn status 'recording' — ứng viên cho recovery sau crash. */
+export async function listRecordingMeetings() {
+  const all = await withStore('meetings', 'readonly', (s) => req(s.getAll()));
+  return all.filter((m) => m.status === 'recording');
 }

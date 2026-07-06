@@ -80,10 +80,20 @@ npm run test:e2e  # E2E: load extension thật vào Chromium (Playwright), có s
 Quy tắc & routing skill cho AI agent: xem [CLAUDE.md](CLAUDE.md) (theo bộ skill
 [base-project-require-skills](https://github.com/gpaul1999/base-project-require-skills)).
 
-## Giới hạn hiện tại (v0.1)
+## Độ bền (v0.2 — spec 001)
 
-- Phiên âm lại (re-transcribe) decode toàn bộ audio vào RAM — phù hợp cuộc họp ≤ ~1 giờ.
+- **Crash-safe**: audio được lưu từng chunk 5 giây ngay khi ghi; trình duyệt/máy sập giữa
+  chừng → lần mở sau phiên xuất hiện với badge "gián đoạn", nghe lại được tới ~10s trước
+  khi sập, transcript còn nguyên.
+- **Phiên dài (tới ~3 giờ)**: phiên âm lại chạy streaming theo cửa sổ 10 phút (WebCodecs +
+  demuxer WebM/Opus tự viết) — không decode cả file vào RAM; có thanh tiến độ.
+- **Tab họp đóng đột ngột** = tự chốt phiên như bấm Dừng.
+- **Model lần đầu**: nút "Chuẩn bị model trước khi họp" + % tiến độ trong popup.
+- **Dung lượng**: quota bar trong popup/thư viện, cảnh báo từ 70%, chặn ghi mới khi ≥90%.
+
+## Giới hạn hiện tại
+
 - Whisper tiny/base đủ dùng cho tiếng Anh; tiếng Việt nên chọn Whisper Small (Nâng cao).
+  WebGPU + tự chọn model theo máy nằm trong spec 002.
 - Độ trễ phụ đề tạm ≤2s là mục tiêu với Whisper Tiny trên máy hiện đại; máy yếu/model to hơn
   sẽ chậm hơn (partial tự bỏ nhịp khi inference bận, không dồn hàng đợi — câu chốt không bao giờ mất).
-- Crash giữa chừng: transcript live đã lưu dần vẫn còn, nhưng file audio của phiên đó mất.

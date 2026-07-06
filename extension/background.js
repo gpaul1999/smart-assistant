@@ -1,6 +1,24 @@
 // Service worker: điều phối vòng đời ghi âm. Việc capture/xử lý audio thật sự
 // diễn ra trong offscreen document (service worker MV3 không có getUserMedia).
 
+import * as db from './lib/db.js';
+import { recoverInterrupted } from './lib/recovery.js';
+
+// Crash-safe recovery (FR-016): mỗi lần service worker khởi động lạnh, quét các phiên
+// 'recording' mồ côi (crash/kill trước đó) → ghép audio từ chunks, đánh dấu 'interrupted'.
+// Idempotent nên chạy lại không hại.
+(async () => {
+  try {
+    const { recording } = await chrome.storage.session.get('recording');
+    const recovered = await recoverInterrupted(db, {
+      activeMeetingId: recording?.meetingId || null,
+    });
+    if (recovered.length) console.info('[recovery] khôi phục phiên gián đoạn:', recovered);
+  } catch (e) {
+    console.error('[recovery]', e);
+  }
+})();
+
 let creatingOffscreen = null;
 
 async function ensureOffscreen() {
@@ -47,6 +65,13 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
 
         case 'stop-recording': {
           await chrome.runtime.sendMessage({ type: 'offscreen-stop' });
+          sendResponse({ ok: true });
+          break;
+        }
+
+        case 'prepare-model': {
+          await ensureOffscreen();
+          await chrome.runtime.sendMessage({ type: 'offscreen-prepare-model', model: msg.model });
           sendResponse({ ok: true });
           break;
         }

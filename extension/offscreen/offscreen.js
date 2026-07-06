@@ -4,11 +4,20 @@
 //   → Chrome Translator API dịch on-device → broadcast cho cửa sổ phụ đề → lưu dần vào DB.
 // Khi dừng: lưu audio, tóm tắt (Gemini Nano on-device / extractive) và hoàn tất record.
 
-import { patchMeeting, getMeeting, saveAudio, getAudio } from '../lib/db.js';
+import {
+  patchMeeting,
+  getMeeting,
+  saveAudio,
+  getAudio,
+  putAudioChunk,
+  getAudioChunks,
+  deleteAudioChunks,
+} from '../lib/db.js';
 import { Transcriber, isNoiseTranscript } from '../lib/transcriber.js';
 import { summarize } from '../lib/summarizer.js';
 import { translateText } from '../lib/translator.js';
-import { Segmenter, rmsOf, mixdown } from '../lib/segmenter.js';
+import { Segmenter, rmsOf, mixdown, labelSpeaker } from '../lib/segmenter.js';
+import { demuxWebmOpus } from '../lib/webm-opus.js';
 import { uid } from '../lib/format.js';
 
 const SR = 16000;
@@ -71,6 +80,13 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       } else if (msg.type === 'offscreen-reprocess') {
         reprocess(msg.meetingId, msg.model); // chạy nền, không chờ
         sendResponse?.({ ok: true });
+      } else if (msg.type === 'offscreen-prepare-model') {
+        // Tải model trước khi vào họp (FR-018) — tiến độ broadcast qua model-progress
+        transcriber
+          .load(msg.model)
+          .then(() => broadcast({ type: 'model-progress', file: 'ready', progress: 100 }))
+          .catch((e) => console.error('[prepare-model]', e));
+        sendResponse?.({ ok: true });
       }
     } catch (e) {
       console.error('[offscreen]', e);
@@ -129,17 +145,30 @@ async function startRecording({ streamId, settings, meta }) {
   }
   await ctx.resume();
 
+  // Tab họp đóng đột ngột → track kết thúc → chốt phiên như bấm dừng (FR-020)
+  tabStream.getAudioTracks()[0]?.addEventListener('ended', () => {
+    if (session && !session.stopped) stopRecording().catch((e) => console.error('[tab-ended]', e));
+  });
+
+  const meetingId = uid();
   const recorder = new MediaRecorder(mixDest.stream, {
     mimeType: 'audio/webm;codecs=opus',
     audioBitsPerSecond: 64000,
   });
-  const chunks = [];
+  // Crash-safe (FR-016): persist từng chunk 5s vào IndexedDB ngay khi có — không giữ RAM.
+  // Chuỗi chunk WebM ghép từ chunk 0 là stream prefix hợp lệ nên phát lại được dù cụt đuôi.
+  let seq = 0;
+  const pendingWrites = new Set();
   recorder.ondataavailable = (e) => {
-    if (e.data.size) chunks.push(e.data);
+    if (!e.data.size) return;
+    const p = putAudioChunk(meetingId, seq++, e.data).catch((err) =>
+      console.error('[chunk-persist]', err)
+    );
+    pendingWrites.add(p);
+    p.finally(() => pendingWrites.delete(p));
   };
   recorder.start(5000);
 
-  const meetingId = uid();
   const startedAt = Date.now();
   session = {
     id: meetingId,
@@ -150,7 +179,7 @@ async function startRecording({ streamId, settings, meta }) {
     playCtx,
     ctx,
     recorder,
-    chunks,
+    pendingWrites,
     segments: [],
     queue: Promise.resolve(),
     segmenter: null,
@@ -214,9 +243,12 @@ async function stopRecording() {
 
   const endedAt = Date.now();
   const durationMs = endedAt - s.startedAt;
-  const blob = new Blob(s.chunks, { type: 'audio/webm' });
+  await Promise.all([...s.pendingWrites]); // chờ chunk cuối ghi xong
+  const chunkRows = await getAudioChunks(s.id);
+  const blob = new Blob(chunkRows.map((c) => c.data), { type: 'audio/webm' });
   await saveAudio(s.id, blob, 'audio/webm');
-  await patchMeeting(s.id, { status: 'summarizing', endedAt, durationMs });
+  await deleteAudioChunks(s.id);
+  await patchMeeting(s.id, { status: 'summarizing', endedAt, durationMs, audioBytes: blob.size });
   broadcast({ type: 'pipeline-status', meetingId: s.id, status: 'summarizing' });
 
   session = null;
@@ -261,19 +293,14 @@ function enqueueSegment({ mic, tab, t0, t1 }) {
   if (!s) return;
   s.queue = s.queue
     .then(async () => {
-      const rmsMic = rmsOf(mic);
-      const rmsTab = rmsOf(tab);
-      if (Math.max(rmsMic, rmsTab) < 0.004) return; // im lặng
+      const speaker = labelSpeaker(rmsOf(mic), rmsOf(tab));
+      if (!speaker) return; // im lặng
 
       const mixed = mixdown(mic, tab);
       const { text } = await runExclusive(() =>
         transcriber.transcribe(mixed, { model: s.cfg.liveModel, language: s.cfg.sourceLang })
       );
       if (isNoiseTranscript(text)) return;
-
-      let speaker = 'both';
-      if (rmsMic > rmsTab * 1.4) speaker = 'me';
-      else if (rmsTab > rmsMic * 1.4) speaker = 'them';
 
       const translation = await translateText(text, {
         sourceLang: s.cfg.sourceLang,
@@ -332,44 +359,43 @@ async function reprocess(meetingId, model) {
     if (!rec?.blob) throw new Error('Không tìm thấy audio đã lưu');
 
     await patchMeeting(meetingId, { status: 'transcribing' });
-    broadcast({ type: 'pipeline-status', meetingId, status: 'transcribing' });
-
-    // decode → mono 16kHz
-    const decodeCtx = new AudioContext({ sampleRate: SR });
-    const buf = await decodeCtx.decodeAudioData(await rec.blob.arrayBuffer());
-    const mono = new Float32Array(buf.length);
-    for (let c = 0; c < buf.numberOfChannels; c++) {
-      const ch = buf.getChannelData(c);
-      for (let i = 0; i < ch.length; i++) mono[i] += ch[i] / buf.numberOfChannels;
-    }
-    await decodeCtx.close().catch(() => {});
+    broadcast({ type: 'pipeline-status', meetingId, status: 'transcribing', progress: 0 });
 
     const cfg = {
       sourceLang: meeting.sourceLang || 'auto',
       targetLang: meeting.targetLang || null,
     };
-    const { text, chunks } = await transcriber.transcribe(mono, {
-      model: model || 'Xenova/whisper-base',
-      language: cfg.sourceLang,
-      timestamps: true,
-    });
-
     const oldSegments = meeting.segments || [];
     const segments = [];
-    for (const ch of chunks || (text ? [{ text, timestamp: [0, null] }] : [])) {
-      const t = (ch.text || '').trim();
-      if (isNoiseTranscript(t)) continue;
-      const t0 = ch.timestamp?.[0] ?? 0;
-      const t1 = ch.timestamp?.[1] ?? t0;
-      const seg = {
-        t0,
-        t1,
-        speaker: speakerByOverlap(oldSegments, t0, t1),
-        text: t,
-        translation: await translateText(t, cfg),
-      };
-      segments.push(seg);
-    }
+
+    // Nhận transcript của một cửa sổ PCM 16k, gộp vào kết quả chung.
+    // keepUntilSec: với cửa sổ không phải cuối, bỏ chunk bắt đầu trong vùng chồng lấn
+    // (cửa sổ sau sẽ phủ) để không lặp câu.
+    const handleWindow = async (pcm, offsetSec, keepUntilSec) => {
+      const { text, chunks } = await runExclusive(() =>
+        transcriber.transcribe(pcm, {
+          model: model || 'Xenova/whisper-base',
+          language: cfg.sourceLang,
+          timestamps: true,
+        })
+      );
+      for (const ch of chunks || (text ? [{ text, timestamp: [0, null] }] : [])) {
+        const t = (ch.text || '').trim();
+        if (isNoiseTranscript(t)) continue;
+        const t0 = ch.timestamp?.[0] ?? 0;
+        if (keepUntilSec != null && t0 >= keepUntilSec) continue;
+        const t1 = ch.timestamp?.[1] ?? t0;
+        segments.push({
+          t0: t0 + offsetSec,
+          t1: t1 + offsetSec,
+          speaker: speakerByOverlap(oldSegments, t0 + offsetSec, t1 + offsetSec),
+          text: t,
+          translation: await translateText(t, cfg),
+        });
+      }
+    };
+
+    await decodeAndTranscribe(rec.blob, meetingId, handleWindow);
 
     await patchMeeting(meetingId, { segments, accurateModel: model });
     await finalizeSummary(meetingId, cfg);
@@ -380,6 +406,120 @@ async function reprocess(meetingId, model) {
   } finally {
     busyReprocess = false;
   }
+}
+
+// ---------------------------------------------- decode audio cho re-transcribe
+
+const LONG_FILE_MS = 30 * 60 * 1000; // ≥30 phút → bắt buộc streaming (RAM)
+const WINDOW_SEC = 600; // cửa sổ 10 phút
+const OVERLAP_SEC = 5;
+
+/**
+ * Decode blob WebM/Opus → gọi handleWindow(pcm16kMono, offsetSec, keepUntilSec) theo từng
+ * cửa sổ. File ngắn hoặc thiếu WebCodecs → decodeAudioData toàn bộ (một "cửa sổ" duy nhất).
+ * Broadcast tiến độ % qua pipeline-status (FR-017).
+ */
+async function decodeAndTranscribe(blob, meetingId, handleWindow) {
+  const buf = new Uint8Array(await blob.arrayBuffer());
+  const demux = demuxWebmOpus(buf);
+  const canStream =
+    typeof AudioDecoder !== 'undefined' && demux.packets.length > 0 && demux.track.codecPrivate;
+
+  if (!canStream || demux.durationMs < LONG_FILE_MS) {
+    if (!canStream && demux.durationMs >= LONG_FILE_MS) {
+      console.warn('[reprocess] file dài nhưng không streaming được — decode toàn bộ, có thể nặng RAM');
+    }
+    const ctx = new AudioContext({ sampleRate: SR });
+    const decoded = await ctx.decodeAudioData(buf.buffer);
+    const mono = new Float32Array(decoded.length);
+    for (let c = 0; c < decoded.numberOfChannels; c++) {
+      const ch = decoded.getChannelData(c);
+      for (let i = 0; i < ch.length; i++) mono[i] += ch[i] / decoded.numberOfChannels;
+    }
+    await ctx.close().catch(() => {});
+    broadcast({ type: 'pipeline-status', meetingId, status: 'transcribing', progress: 50 });
+    await handleWindow(mono, 0, null);
+    broadcast({ type: 'pipeline-status', meetingId, status: 'transcribing', progress: 100 });
+    return;
+  }
+
+  // Streaming: decode Opus packet theo cửa sổ bằng WebCodecs — đỉnh RAM ≈ 1 cửa sổ PCM.
+  const windows = [];
+  for (let start = 0; start < demux.durationMs; start += WINDOW_SEC * 1000) {
+    windows.push([start, Math.min(start + (WINDOW_SEC + OVERLAP_SEC) * 1000, demux.durationMs)]);
+  }
+  for (let w = 0; w < windows.length; w++) {
+    const [fromMs, toMs] = windows[w];
+    const pcm48 = await decodeOpusRange(demux, fromMs, toMs);
+    const pcm16 = downsample3x(pcm48);
+    const isLast = w === windows.length - 1;
+    await handleWindow(pcm16, fromMs / 1000, isLast ? null : WINDOW_SEC);
+    broadcast({
+      type: 'pipeline-status',
+      meetingId,
+      status: 'transcribing',
+      progress: Math.round(((w + 1) / windows.length) * 100),
+    });
+  }
+}
+
+/** Decode các packet trong [fromMs, toMs] → Float32 mono 48kHz. */
+function decodeOpusRange(demux, fromMs, toMs) {
+  return new Promise((resolve, reject) => {
+    const parts = [];
+    let total = 0;
+    const decoder = new AudioDecoder({
+      output: (audioData) => {
+        const n = audioData.numberOfFrames;
+        const chans = audioData.numberOfChannels;
+        const mono = new Float32Array(n);
+        const tmp = new Float32Array(n);
+        for (let c = 0; c < chans; c++) {
+          audioData.copyTo(tmp, { planeIndex: c, format: 'f32-planar' });
+          for (let i = 0; i < n; i++) mono[i] += tmp[i] / chans;
+        }
+        audioData.close();
+        parts.push(mono);
+        total += n;
+      },
+      error: reject,
+    });
+    decoder.configure({
+      codec: 'opus',
+      sampleRate: 48000,
+      numberOfChannels: demux.track.channels || 2,
+      description: demux.track.codecPrivate,
+    });
+    for (const p of demux.packets) {
+      if (p.tsMs < fromMs - 100 || p.tsMs > toMs) continue; // 100ms preroll
+      decoder.decode(
+        new EncodedAudioChunk({ type: 'key', timestamp: p.tsMs * 1000, data: p.data })
+      );
+    }
+    decoder
+      .flush()
+      .then(() => {
+        decoder.close();
+        const out = new Float32Array(total);
+        let off = 0;
+        for (const part of parts) {
+          out.set(part, off);
+          off += part.length;
+        }
+        resolve(out);
+      })
+      .catch(reject);
+  });
+}
+
+/** 48kHz → 16kHz: trung bình mỗi 3 mẫu (low-pass đơn giản, đủ cho giọng nói). */
+function downsample3x(pcm48) {
+  const out = new Float32Array(Math.floor(pcm48.length / 3));
+  for (let i = 0; i < out.length; i++) {
+    const j = i * 3;
+    out[i] = (pcm48[j] + pcm48[j + 1] + pcm48[j + 2]) / 3;
+  }
+  return out;
 }
 
 // Giữ nhãn người nói từ transcript live: gán theo đoạn cũ chồng lấp thời gian nhiều nhất.
