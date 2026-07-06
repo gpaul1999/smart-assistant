@@ -1,9 +1,18 @@
 {
   "manifest_version": 3,
-  "name": "Smart Meeting Assistant — Local Recorder",
-  "version": "0.1.0",
-  "description": "Ghi âm speaker + mic trong cuộc họp, phiên âm & dịch trực tiếp, tóm tắt điểm chính — 100% xử lý local, dữ liệu không rời máy.",
-  "permissions": ["tabCapture", "offscreen", "storage", "activeTab"],
+  "name": "__MSG_extName__",
+  "version": "0.3.0",
+  "description": "__MSG_extDesc__",
+  "default_locale": "vi",
+  "permissions": [
+    "tabCapture",
+    "offscreen",
+    "storage",
+    "activeTab",
+    "scripting",
+    "tabs",
+    "notifications"
+  ],
   "action": {
     "default_popup": "popup/popup.html",
     "default_title": "Smart Meeting Assistant"

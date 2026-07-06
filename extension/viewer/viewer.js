@@ -1,6 +1,8 @@
 import { listMeetings, getMeeting, patchMeeting, deleteMeeting, getAudio } from '../lib/db.js';
 import { secToClock, fmtDate, buildMarkdown, SPEAKER_LABELS } from '../lib/format.js';
 import { assess, fmtBytes } from '../lib/storage-policy.js';
+import { localize } from '../lib/i18n.js';
+import { verifyLicense, PROD_PUBLIC_KEY } from '../lib/license.js';
 
 const $ = (id) => document.getElementById(id);
 const STATUS_LABELS = {
@@ -17,9 +19,30 @@ let audioUrl = null;
 
 init();
 
+async function isPro() {
+  const { license, licensePubKey } = await chrome.storage.local.get(['license', 'licensePubKey']);
+  if (!license?.key) return false;
+  return (await verifyLicense(license.key, licensePubKey || PROD_PUBLIC_KEY)).valid;
+}
+
 async function init() {
+  localize(document, chrome.i18n.getMessage);
   await renderList();
   await renderQuota();
+  await renderDataPanel();
+
+  // FR-030: xóa toàn bộ dữ liệu (confirm 2 lớp)
+  $('dp-delete-all').addEventListener('click', async () => {
+    if (!confirm(chrome.i18n.getMessage('vwDeleteAllConfirm'))) return;
+    if (!confirm('Chắc chắn? Đây là lần xác nhận cuối.')) return;
+    for (const m of await listMeetings()) await deleteMeeting(m.id);
+    currentId = null;
+    $('detail').hidden = true;
+    $('placeholder').hidden = false;
+    await renderList();
+    await renderQuota();
+    await renderDataPanel();
+  });
 
   $('d-show-trans').addEventListener('change', (e) =>
     document.body.classList.toggle('hide-trans', !e.target.checked)
@@ -41,6 +64,11 @@ async function init() {
     if (rec?.blob) download(`${fileBase(await getMeeting(currentId))}.webm`, rec.blob);
   });
   $('d-retranscribe').addEventListener('click', async () => {
+    // D3/FR-029: Whisper Small (re-transcribe chất lượng cao) là tính năng Pro
+    if ($('d-model').value.includes('small') && !(await isPro())) {
+      alert('Whisper Small là tính năng Pro — dán license key trong popup (mục Nâng cao). Bản free dùng Whisper Base không giới hạn.');
+      return;
+    }
     await chrome.runtime.sendMessage({
       type: 'reprocess',
       meetingId: currentId,
@@ -71,6 +99,13 @@ async function init() {
       if (msg.type === 'pipeline-status' && msg.status === 'done') await renderQuota();
     }
   });
+}
+
+// FR-030: panel Dữ liệu của bạn
+async function renderDataPanel() {
+  const meetings = await listMeetings();
+  const label = chrome.i18n.getMessage('vwMeetingsCount') || 'cuộc họp';
+  $('dp-count').textContent = `${meetings.length} ${label}`;
 }
 
 // FR-019: quota bar trong thư viện

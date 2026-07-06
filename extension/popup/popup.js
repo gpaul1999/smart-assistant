@@ -1,4 +1,6 @@
 import { assess, fmtBytes } from '../lib/storage-policy.js';
+import { localize } from '../lib/i18n.js';
+import { verifyLicense, PROD_PUBLIC_KEY } from '../lib/license.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -7,7 +9,9 @@ const DEFAULT_SETTINGS = {
   accurateModel: 'Xenova/whisper-base',
   sourceLang: 'auto',
   targetLang: 'vi',
-  openLiveWindow: true,
+  captionMode: 'overlay',
+  ephemeralDefault: false,
+  meetingNudge: true,
 };
 
 let currentTab = null;
@@ -17,7 +21,11 @@ let quotaCritical = false;
 init();
 
 async function init() {
+  localize(document, chrome.i18n.getMessage);
   await loadSettings();
+  await checkOnboarding();
+  await refreshLicense();
+  $('license-key').addEventListener('change', onLicenseInput);
   await refreshQuota();
   await refreshTab();
   await refreshMicStatus();
@@ -48,7 +56,10 @@ async function init() {
   $('mic-grant').addEventListener('click', () =>
     chrome.tabs.create({ url: chrome.runtime.getURL('permission/permission.html') })
   );
-  for (const id of ['target-lang', 'source-lang', 'live-model', 'open-live']) {
+  $('open-onboarding').addEventListener('click', () =>
+    chrome.tabs.create({ url: chrome.runtime.getURL('onboarding/onboarding.html') })
+  );
+  for (const id of ['target-lang', 'source-lang', 'live-model', 'caption-mode', 'ephemeral']) {
     $(id).addEventListener('change', saveSettings);
   }
 
@@ -87,18 +98,60 @@ async function loadSettings() {
   $('target-lang').value = s.targetLang ?? '';
   $('source-lang').value = s.sourceLang;
   $('live-model').value = s.liveModel;
-  $('open-live').checked = s.openLiveWindow;
+  $('caption-mode').value = s.captionMode;
+  $('ephemeral').checked = s.ephemeralDefault;
 }
 
 async function saveSettings() {
+  const { settings: cur = {} } = await chrome.storage.local.get('settings');
   const settings = {
     ...DEFAULT_SETTINGS,
+    ...cur, // giữ bench/model do onboarding chọn
     targetLang: $('target-lang').value || null,
     sourceLang: $('source-lang').value,
     liveModel: $('live-model').value,
-    openLiveWindow: $('open-live').checked,
+    captionMode: $('caption-mode').value,
+    ephemeralDefault: $('ephemeral').checked,
   };
   await chrome.storage.local.set({ settings });
+}
+
+// FR-029: nhập + verify license Pro (offline; licensePubKey trong storage cho phép test dev)
+async function refreshLicense() {
+  const { license, licensePubKey } = await chrome.storage.local.get(['license', 'licensePubKey']);
+  const el = $('license-status');
+  if (license?.key) {
+    $('license-key').value = license.key;
+    const out = await verifyLicense(license.key, licensePubKey || PROD_PUBLIC_KEY);
+    el.textContent = out.valid ? chrome.i18n.getMessage('popProActive') : chrome.i18n.getMessage('popLicenseInvalid');
+    el.className = out.valid ? 'value ok' : 'value warn';
+  } else {
+    el.textContent = '';
+  }
+}
+
+async function onLicenseInput() {
+  const key = $('license-key').value.trim();
+  const { licensePubKey } = await chrome.storage.local.get('licensePubKey');
+  if (!key) {
+    await chrome.storage.local.remove('license');
+    return refreshLicense();
+  }
+  const out = await verifyLicense(key, licensePubKey || PROD_PUBLIC_KEY);
+  if (out.valid) {
+    await chrome.storage.local.set({
+      license: { key, plan: out.payload.plan, sub: out.payload.sub, exp: out.payload.exp || null, verifiedAt: Date.now() },
+    });
+  } else {
+    await chrome.storage.local.remove('license');
+  }
+  await refreshLicense();
+}
+
+// FR-021: nhắc quay lại onboarding khi bỏ dở
+async function checkOnboarding() {
+  const { onboarding = {} } = await chrome.storage.local.get('onboarding');
+  $('onboarding-nudge').hidden = (onboarding.step || 0) >= 3;
 }
 
 async function refreshTab() {
@@ -176,6 +229,7 @@ async function onToggle() {
         type: 'start-recording',
         tabId: currentTab.id,
         tabTitle: currentTab.title,
+        ephemeral: $('ephemeral').checked,
       });
       if (resp && !resp.ok) throw new Error(resp.error || 'Không bắt đầu được');
     }

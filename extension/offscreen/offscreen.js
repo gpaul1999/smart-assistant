@@ -32,6 +32,11 @@ const DEFAULT_SETTINGS = {
   openLiveWindow: true,
 };
 
+// Thiết bị inference từ benchmark (spec 002 FR-022/023); thiếu → wasm
+function deviceOf(cfg) {
+  return cfg?.bench?.device || 'wasm';
+}
+
 const transcriber = new Transcriber({
   vendorUrl: VENDOR_URL,
   onProgress: (p) => {
@@ -82,8 +87,9 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
         sendResponse?.({ ok: true });
       } else if (msg.type === 'offscreen-prepare-model') {
         // Tải model trước khi vào họp (FR-018) — tiến độ broadcast qua model-progress
-        transcriber
-          .load(msg.model)
+        chrome.storage.local.get('settings').then(({ settings = {} }) =>
+          transcriber.load(msg.model, { device: deviceOf(settings) })
+        )
           .then(() => broadcast({ type: 'model-progress', file: 'ready', progress: 100 }))
           .catch((e) => console.error('[prepare-model]', e));
         sendResponse?.({ ok: true });
@@ -99,7 +105,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
 
 // ---------------------------------------------------------------- ghi âm
 
-async function startRecording({ streamId, settings, meta }) {
+async function startRecording({ streamId, settings, meta, ephemeral = false }) {
   if (session) throw new Error('Đang có phiên ghi âm khác');
   const cfg = { ...DEFAULT_SETTINGS, ...settings };
 
@@ -151,23 +157,27 @@ async function startRecording({ streamId, settings, meta }) {
   });
 
   const meetingId = uid();
-  const recorder = new MediaRecorder(mixDest.stream, {
-    mimeType: 'audio/webm;codecs=opus',
-    audioBitsPerSecond: 64000,
-  });
-  // Crash-safe (FR-016): persist từng chunk 5s vào IndexedDB ngay khi có — không giữ RAM.
-  // Chuỗi chunk WebM ghép từ chunk 0 là stream prefix hợp lệ nên phát lại được dù cụt đuôi.
-  let seq = 0;
+  // Chế độ "chỉ phụ đề, không lưu" (FR-027): không recorder, không chunk, không record DB.
+  let recorder = null;
   const pendingWrites = new Set();
-  recorder.ondataavailable = (e) => {
-    if (!e.data.size) return;
-    const p = putAudioChunk(meetingId, seq++, e.data).catch((err) =>
-      console.error('[chunk-persist]', err)
-    );
-    pendingWrites.add(p);
-    p.finally(() => pendingWrites.delete(p));
-  };
-  recorder.start(5000);
+  if (!ephemeral) {
+    recorder = new MediaRecorder(mixDest.stream, {
+      mimeType: 'audio/webm;codecs=opus',
+      audioBitsPerSecond: 64000,
+    });
+    // Crash-safe (FR-016): persist từng chunk 5s vào IndexedDB ngay khi có — không giữ RAM.
+    // Chuỗi chunk WebM ghép từ chunk 0 là stream prefix hợp lệ nên phát lại được dù cụt đuôi.
+    let seq = 0;
+    recorder.ondataavailable = (e) => {
+      if (!e.data.size) return;
+      const p = putAudioChunk(meetingId, seq++, e.data).catch((err) =>
+        console.error('[chunk-persist]', err)
+      );
+      pendingWrites.add(p);
+      p.finally(() => pendingWrites.delete(p));
+    };
+    recorder.start(5000);
+  }
 
   const startedAt = Date.now();
   session = {
@@ -180,6 +190,7 @@ async function startRecording({ streamId, settings, meta }) {
     ctx,
     recorder,
     pendingWrites,
+    ephemeral,
     segments: [],
     queue: Promise.resolve(),
     segmenter: null,
@@ -195,19 +206,21 @@ async function startRecording({ streamId, settings, meta }) {
   };
   session.partialTimer = setInterval(partialTick, PARTIAL_TICK_MS);
 
-  await patchMeeting(meetingId, {
-    title: meta.title,
-    startedAt,
-    status: 'recording',
-    segments: [],
-    sourceLang: cfg.sourceLang,
-    targetLang: cfg.targetLang,
-    micUsed: !!micStream,
-    liveModel: cfg.liveModel,
-  });
+  if (!ephemeral) {
+    await patchMeeting(meetingId, {
+      title: meta.title,
+      startedAt,
+      status: 'recording',
+      segments: [],
+      sourceLang: cfg.sourceLang,
+      targetLang: cfg.targetLang,
+      micUsed: !!micStream,
+      liveModel: cfg.liveModel,
+    });
+  }
 
   // Nạp model live ngay để phụ đề ra sớm
-  transcriber.load(cfg.liveModel).catch((e) => console.error('load model', e));
+  transcriber.load(cfg.liveModel, { device: deviceOf(cfg) }).catch((e) => console.error('load model', e));
 
   broadcast({
     type: 'recording-started',
@@ -215,7 +228,8 @@ async function startRecording({ streamId, settings, meta }) {
     startedAt,
     title: meta.title,
     micUsed: !!micStream,
-    openLiveWindow: cfg.openLiveWindow,
+    ephemeral,
+    tabId: meta.tabId,
   });
 }
 
@@ -226,10 +240,12 @@ async function stopRecording() {
   clearInterval(s.partialTimer);
 
   // dừng recorder và các track
-  await new Promise((resolve) => {
-    s.recorder.onstop = resolve;
-    s.recorder.stop();
-  });
+  if (s.recorder) {
+    await new Promise((resolve) => {
+      s.recorder.onstop = resolve;
+      s.recorder.stop();
+    });
+  }
   for (const t of [...s.tabStream.getTracks(), ...(s.micStream?.getTracks() || [])]) t.stop();
 
   broadcast({ type: 'recording-stopped', meetingId: s.id });
@@ -240,6 +256,13 @@ async function stopRecording() {
 
   await s.ctx.close().catch(() => {});
   await s.playCtx.close().catch(() => {});
+
+  if (s.ephemeral) {
+    // không có gì để lưu — đúng lời hứa "chỉ phụ đề" (SC-013)
+    session = null;
+    broadcast({ type: 'pipeline-status', meetingId: s.id, status: 'done', ephemeral: true });
+    return;
+  }
 
   const endedAt = Date.now();
   const durationMs = endedAt - s.startedAt;
@@ -269,7 +292,7 @@ async function partialTick() {
     const mixed = mixdown(snap.mic, snap.tab);
     if (rmsOf(mixed) < 0.004) return;
     const { text } = await runExclusive(() =>
-      transcriber.transcribe(mixed, { model: s.cfg.liveModel, language: s.cfg.sourceLang })
+      transcriber.transcribe(mixed, { model: s.cfg.liveModel, language: s.cfg.sourceLang, device: deviceOf(s.cfg) })
     );
     if (session !== s || s.stopped || isNoiseTranscript(text)) return;
     const partial = { t0: snap.t0, t1: snap.t1, text };
@@ -298,7 +321,7 @@ function enqueueSegment({ mic, tab, t0, t1 }) {
 
       const mixed = mixdown(mic, tab);
       const { text } = await runExclusive(() =>
-        transcriber.transcribe(mixed, { model: s.cfg.liveModel, language: s.cfg.sourceLang })
+        transcriber.transcribe(mixed, { model: s.cfg.liveModel, language: s.cfg.sourceLang, device: deviceOf(s.cfg) })
       );
       if (isNoiseTranscript(text)) return;
 
@@ -309,7 +332,7 @@ function enqueueSegment({ mic, tab, t0, t1 }) {
 
       const segment = { t0, t1, speaker, text, translation };
       s.segments.push(segment);
-      await patchMeeting(s.id, { segments: s.segments });
+      if (!s.ephemeral) await patchMeeting(s.id, { segments: s.segments });
       broadcast({ type: 'live-segment', meetingId: s.id, segment });
     })
     .catch((e) => console.error('[live-segment]', e));
@@ -361,6 +384,8 @@ async function reprocess(meetingId, model) {
     await patchMeeting(meetingId, { status: 'transcribing' });
     broadcast({ type: 'pipeline-status', meetingId, status: 'transcribing', progress: 0 });
 
+    const { settings: curSettings = {} } = await chrome.storage.local.get('settings');
+    const reprocessDevice = deviceOf(curSettings);
     const cfg = {
       sourceLang: meeting.sourceLang || 'auto',
       targetLang: meeting.targetLang || null,
@@ -377,6 +402,7 @@ async function reprocess(meetingId, model) {
           model: model || 'Xenova/whisper-base',
           language: cfg.sourceLang,
           timestamps: true,
+          device: reprocessDevice,
         })
       );
       for (const ch of chunks || (text ? [{ text, timestamp: [0, null] }] : [])) {

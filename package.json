@@ -6,6 +6,7 @@
   "type": "module",
   "scripts": {
     "vendor": "node scripts/vendor.mjs",
+    "pack": "node scripts/pack.mjs",
     "test": "node --test \"tests/unit/*.test.js\"",
     "test:e2e": "playwright test"
   },

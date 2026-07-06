@@ -21,6 +21,8 @@ test.beforeAll(async () => {
     args: [
       `--disable-extensions-except=${EXT_PATH}`,
       `--load-extension=${EXT_PATH}`,
+      '--use-fake-device-for-media-stream',
+      '--use-fake-ui-for-media-stream',
     ],
   });
   let [sw] = context.serviceWorkers();
@@ -237,6 +239,96 @@ test('webm-opus demuxer chạy được trong trang extension (ESM)', async () =
     return Array.isArray(out.packets);
   });
   expect(ok).toBe(true);
+  await page.close();
+});
+
+test('onboarding: 3 bước, cấp mic (fake) chuyển bước, skip → done + state lưu', async () => {
+  const page = await context.newPage();
+  await page.goto(extUrl('onboarding/onboarding.html'));
+  await expect(page.locator('#step-1')).toBeVisible();
+  await expect(page.locator('h1')).not.toHaveText('');
+
+  await page.locator('#grant-mic').click();
+  await expect(page.locator('#mic-result')).toHaveClass(/ok/);
+  await expect(page.locator('#step-2')).toBeVisible({ timeout: 3000 });
+
+  await page.locator('#target-lang').selectOption('vi');
+  await page.locator('#lang-next').click();
+  await expect(page.locator('#step-3')).toBeVisible();
+
+  await page.locator('#finish').click();
+  await expect(page.locator('#step-done')).toBeVisible();
+
+  const state = await page.evaluate(() => chrome.storage.local.get(['onboarding', 'settings']));
+  expect(state.onboarding.step).toBe(3);
+  expect(state.onboarding.noticeSeen).toBe(true);
+  expect(state.settings.targetLang).toBe('vi');
+  await page.screenshot({ path: join(ARTIFACTS, 'onboarding.png') });
+  await page.close();
+});
+
+test('overlay: inject + render partial/final + đổi cỡ chữ', async () => {
+  const page = await context.newPage();
+  await page.goto(extUrl('viewer/viewer.html'));
+  await page.addScriptTag({ url: '/content/overlay.js' }); // same-origin → qua CSP 'self'
+  await page.waitForFunction(() => !!window.__smaOverlay);
+
+  await page.evaluate(() => {
+    window.__smaOverlay.renderPartial({ t0: 0, t1: 2, text: 'this is interim', translation: '' });
+    window.__smaOverlay.renderSegment({
+      t0: 0, t1: 3, speaker: 'them',
+      text: 'Can you introduce yourself?',
+      translation: 'Bạn giới thiệu bản thân nhé?',
+    });
+  });
+  const shadowText = await page.evaluate(
+    () => window.__smaOverlay.host.shadowRoot.querySelector('.lines').textContent
+  );
+  expect(shadowText).toContain('Can you introduce yourself?');
+  expect(shadowText).toContain('Bạn giới thiệu bản thân nhé?');
+  expect(shadowText).not.toContain('this is interim'); // final thay interim
+
+  const fsBefore = await page.evaluate(() =>
+    window.__smaOverlay.host.shadowRoot.querySelector('.box').style.getPropertyValue('--fs')
+  );
+  await page.evaluate(() => window.__smaOverlay.host.shadowRoot.querySelector('.plus').click());
+  const fsAfter = await page.evaluate(() =>
+    window.__smaOverlay.host.shadowRoot.querySelector('.box').style.getPropertyValue('--fs')
+  );
+  expect(parseInt(fsAfter)).toBeGreaterThan(parseInt(fsBefore || '17'));
+  await page.screenshot({ path: join(ARTIFACTS, 'overlay.png') });
+  await page.close();
+});
+
+test('popup: caption-mode select + license input + ephemeral checkbox (002)', async () => {
+  const page = await context.newPage();
+  await page.goto(extUrl('popup/popup.html'));
+  await expect(page.locator('#caption-mode option')).toHaveCount(3);
+  await expect(page.locator('#ephemeral')).toBeAttached();
+  await page.locator('details summary').click();
+  await expect(page.locator('#license-key')).toBeVisible();
+  // key rác → không có trạng thái Pro
+  await page.locator('#license-key').fill('SMA1.xxx.yyy');
+  await page.locator('#license-key').dispatchEvent('change');
+  await expect(page.locator('#license-status')).not.toHaveClass(/ok/);
+  await page.close();
+});
+
+test('viewer: panel Dữ liệu của bạn + xóa toàn bộ', async () => {
+  const page = await context.newPage();
+  await page.goto(extUrl('viewer/viewer.html'));
+  await page.evaluate(async () => {
+    const db = await import('/lib/db.js');
+    for (const m of await db.listMeetings()) await db.deleteMeeting(m.id); // dọn test trước
+    await db.putMeeting({ id: 'dp-1', title: 'A', startedAt: 1, status: 'done' });
+    await db.putMeeting({ id: 'dp-2', title: 'B', startedAt: 2, status: 'done' });
+  });
+  await page.reload();
+  await expect(page.locator('#dp-count')).toContainText('2');
+  page.on('dialog', (d) => d.accept());
+  await page.locator('#dp-delete-all').click();
+  await expect(page.locator('#dp-count')).toContainText('0');
+  await expect(page.locator('#empty')).toBeVisible();
   await page.close();
 });
 

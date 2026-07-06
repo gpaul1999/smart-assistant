@@ -1,0 +1,42 @@
+{
+  "extName": { "message": "Smart Meeting Assistant — Local Recorder" },
+  "extDesc": { "message": "Live captions + translation for interviews and meetings, recording & summaries — 100% on-device, no bot, no cloud." },
+
+  "onbTitle": { "message": "Welcome! Set up in 3 steps" },
+  "onbStep1Title": { "message": "Step 1 — Grant microphone access" },
+  "onbStep1Desc": { "message": "So your own voice is captured alongside the other side. Audio is processed and stored only on your machine." },
+  "onbNotice": { "message": "Note: call-recording laws differ by region — some places require consent from all parties. You are responsible for saved recordings; a \"captions only, no saving\" mode is always available." },
+  "onbGrantMic": { "message": "Grant microphone" },
+  "onbMicOk": { "message": "✔ Granted" },
+  "onbStep2Title": { "message": "Step 2 — Which language should we translate into?" },
+  "onbStep2Desc": { "message": "Captions appear bilingual: original + your translation." },
+  "onbStep3Title": { "message": "Step 3 — Say something!" },
+  "onbStep3Desc": { "message": "Press the button and say anything — you'll see the caption + translation right here." },
+  "onbSpeak": { "message": "🎙️ Press & speak (5 seconds)" },
+  "onbListening": { "message": "Listening…" },
+  "onbPreparing": { "message": "Preparing the recognizer (one time only)…" },
+  "onbBenchDone": { "message": "Your machine will use: " },
+  "onbDone": { "message": "Done! Open your meeting tab (Google Meet, Zoom web…) and click the extension icon to start." },
+  "onbNext": { "message": "Continue" },
+  "onbSkip": { "message": "Later" },
+
+  "popCaptionMode": { "message": "Live captions" },
+  "popCaptionOverlay": { "message": "Overlay in meeting tab" },
+  "popCaptionWindow": { "message": "Separate window" },
+  "popCaptionOff": { "message": "Off" },
+  "popEphemeral": { "message": "Captions only, don't save" },
+  "popFinishOnboarding": { "message": "⚙️ Finish initial setup" },
+  "popProActive": { "message": "Pro ✔" },
+  "popLicenseInvalid": { "message": "Invalid key" },
+  "popLicensePlaceholder": { "message": "Paste Pro license key…" },
+
+  "ovlStop": { "message": "Stop" },
+  "ovlEphemeralTag": { "message": "not saved" },
+
+  "vwDataPanelTitle": { "message": "🔒 Your data" },
+  "vwDataPanelDesc": { "message": "Everything lives in this browser on this machine. No server, no uploads." },
+  "vwDeleteAll": { "message": "Delete all data" },
+  "vwDeleteAllConfirm": { "message": "Permanently delete ALL meetings (audio + transcripts + summaries)? This cannot be undone." },
+  "vwMeetingsCount": { "message": "meetings" },
+  "vwPrivacyLink": { "message": "Privacy policy" }
+}

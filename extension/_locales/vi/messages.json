@@ -1,0 +1,42 @@
+{
+  "extName": { "message": "Smart Meeting Assistant — Local Recorder" },
+  "extDesc": { "message": "Phụ đề + dịch trực tiếp trong phỏng vấn/cuộc họp, ghi âm & tóm tắt — 100% xử lý trên máy bạn, không bot, không cloud." },
+
+  "onbTitle": { "message": "Chào mừng! Thiết lập trong 3 bước" },
+  "onbStep1Title": { "message": "Bước 1 — Cấp quyền microphone" },
+  "onbStep1Desc": { "message": "Để ghi lại giọng của bạn bên cạnh tiếng của đối phương. Âm thanh chỉ được xử lý và lưu trên máy bạn." },
+  "onbNotice": { "message": "Lưu ý: luật ghi âm cuộc gọi khác nhau theo nơi bạn ở — một số nơi cần sự đồng ý của cả hai bên. Bạn chịu trách nhiệm khi lưu bản ghi; luôn có chế độ \"chỉ phụ đề, không lưu\"." },
+  "onbGrantMic": { "message": "Cấp quyền microphone" },
+  "onbMicOk": { "message": "✔ Đã cấp quyền" },
+  "onbStep2Title": { "message": "Bước 2 — Bạn muốn dịch sang ngôn ngữ nào?" },
+  "onbStep2Desc": { "message": "Phụ đề sẽ hiện song ngữ: nguyên văn + bản dịch cho bạn." },
+  "onbStep3Title": { "message": "Bước 3 — Nói thử một câu!" },
+  "onbStep3Desc": { "message": "Bấm nút và nói một câu bất kỳ — bạn sẽ thấy phụ đề + bản dịch ngay tại đây." },
+  "onbSpeak": { "message": "🎙️ Bấm và nói (5 giây)" },
+  "onbListening": { "message": "Đang nghe…" },
+  "onbPreparing": { "message": "Đang chuẩn bị bộ nhận dạng (một lần duy nhất)…" },
+  "onbBenchDone": { "message": "Máy của bạn dùng cấu hình: " },
+  "onbDone": { "message": "Xong! Vào tab cuộc họp (Google Meet, Zoom web…) và bấm icon extension để bắt đầu." },
+  "onbNext": { "message": "Tiếp tục" },
+  "onbSkip": { "message": "Để sau" },
+
+  "popCaptionMode": { "message": "Phụ đề live" },
+  "popCaptionOverlay": { "message": "Overlay trong tab họp" },
+  "popCaptionWindow": { "message": "Cửa sổ riêng" },
+  "popCaptionOff": { "message": "Tắt" },
+  "popEphemeral": { "message": "Chỉ phụ đề, không lưu" },
+  "popFinishOnboarding": { "message": "⚙️ Hoàn tất thiết lập ban đầu" },
+  "popProActive": { "message": "Pro ✔" },
+  "popLicenseInvalid": { "message": "Key không hợp lệ" },
+  "popLicensePlaceholder": { "message": "Dán license key Pro…" },
+
+  "ovlStop": { "message": "Dừng" },
+  "ovlEphemeralTag": { "message": "phiên không lưu" },
+
+  "vwDataPanelTitle": { "message": "🔒 Dữ liệu của bạn" },
+  "vwDataPanelDesc": { "message": "Mọi thứ nằm trong trình duyệt trên máy này. Không server, không upload." },
+  "vwDeleteAll": { "message": "Xóa toàn bộ dữ liệu" },
+  "vwDeleteAllConfirm": { "message": "Xóa vĩnh viễn TOÀN BỘ cuộc họp (audio + transcript + tóm tắt)? Không khôi phục được." },
+  "vwMeetingsCount": { "message": "cuộc họp" },
+  "vwPrivacyLink": { "message": "Chính sách quyền riêng tư" }
+}

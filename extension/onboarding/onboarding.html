@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title data-i18n="onbTitle">Chào mừng</title>
+    <link rel="stylesheet" href="onboarding.css" />
+  </head>
+  <body>
+    <main>
+      <header>
+        <div class="logo">🎙️</div>
+        <h1 data-i18n="onbTitle"></h1>
+        <div class="steps-nav">
+          <span class="dot" data-step="1"></span>
+          <span class="dot" data-step="2"></span>
+          <span class="dot" data-step="3"></span>
+        </div>
+      </header>
+
+      <section id="step-1" class="step">
+        <h2 data-i18n="onbStep1Title"></h2>
+        <p data-i18n="onbStep1Desc"></p>
+        <p class="notice" data-i18n="onbNotice"></p>
+        <button id="grant-mic" class="primary" data-i18n="onbGrantMic"></button>
+        <p id="mic-result"></p>
+      </section>
+
+      <section id="step-2" class="step" hidden>
+        <h2 data-i18n="onbStep2Title"></h2>
+        <p data-i18n="onbStep2Desc"></p>
+        <select id="target-lang" size="8">
+          <option value="vi">Tiếng Việt</option>
+          <option value="en">English</option>
+          <option value="ja">日本語</option>
+          <option value="ko">한국어</option>
+          <option value="zh">中文</option>
+          <option value="fr">Français</option>
+          <option value="de">Deutsch</option>
+          <option value="">(Không dịch / No translation)</option>
+        </select>
+        <button id="lang-next" class="primary" data-i18n="onbNext"></button>
+      </section>
+
+      <section id="step-3" class="step" hidden>
+        <h2 data-i18n="onbStep3Title"></h2>
+        <p data-i18n="onbStep3Desc"></p>
+        <div id="prep" class="prep">
+          <span data-i18n="onbPreparing"></span>
+          <progress id="prep-bar" max="100" value="0"></progress>
+        </div>
+        <div id="bench-result" class="bench" hidden></div>
+        <button id="speak" class="primary" data-i18n="onbSpeak" disabled></button>
+        <div id="try-result" class="try-result" hidden>
+          <p id="try-text" class="orig"></p>
+          <p id="try-translation" class="trans"></p>
+        </div>
+        <button id="finish" class="link" data-i18n="onbSkip"></button>
+      </section>
+
+      <section id="step-done" class="step" hidden>
+        <h2>🎉</h2>
+        <p data-i18n="onbDone"></p>
+      </section>
+    </main>
+    <script type="module" src="onboarding.js"></script>
+  </body>
+</html>

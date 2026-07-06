@@ -19,6 +19,75 @@ import { recoverInterrupted } from './lib/recovery.js';
   }
 })();
 
+// FR-021: cài xong → mở onboarding
+chrome.runtime.onInstalled.addListener((details) => {
+  if (details.reason === 'install') {
+    chrome.tabs.create({ url: chrome.runtime.getURL('onboarding/onboarding.html') });
+  }
+});
+
+// FR-028: nhắc ghi khi vào domain họp (badge + notification 1 lần/tab, KHÔNG tự ghi)
+const MEETING_HOSTS = /(^|\.)meet\.google\.com$|(^|\.)zoom\.us$|(^|\.)teams\.microsoft\.com$|(^|\.)teams\.live\.com$/;
+const nudgedTabs = new Set();
+chrome.tabs.onRemoved.addListener((tabId) => nudgedTabs.delete(tabId));
+chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
+  if (changeInfo.status !== 'complete' || !tab.url) return;
+  let host = '';
+  try { host = new URL(tab.url).hostname; } catch { return; }
+  if (!MEETING_HOSTS.test(host)) return;
+  chrome.action.setBadgeText({ tabId, text: '●' });
+  chrome.action.setBadgeBackgroundColor({ tabId, color: '#2563eb' });
+  const { settings = {} } = await chrome.storage.local.get('settings');
+  if (settings.meetingNudge === false || nudgedTabs.has(tabId)) return;
+  const { recording } = await chrome.storage.session.get('recording');
+  if (recording) return; // FR-005: đang ghi phiên khác thì không nhắc
+  nudgedTabs.add(tabId);
+  chrome.notifications?.create(`nudge-${tabId}`, {
+    type: 'basic',
+    iconUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
+    title: 'Smart Meeting Assistant',
+    message: 'Bạn đang ở tab cuộc họp — bấm icon extension để ghi + phụ đề dịch trực tiếp.',
+  });
+});
+chrome.notifications?.onClicked.addListener((id) => {
+  if (!id.startsWith('nudge-')) return;
+  const tabId = Number(id.slice(6));
+  chrome.tabs.update(tabId, { active: true });
+  chrome.action.openPopup?.().catch(() => {}); // best-effort (R6)
+  chrome.notifications.clear(id);
+});
+
+// FR-024: content script không nhận runtime broadcast → relay caption qua tabs.sendMessage
+let recordingTabId = null;
+let overlayInjected = false;
+
+async function setupCaptions(tabId, ephemeral) {
+  const { settings = {} } = await chrome.storage.local.get('settings');
+  const mode = settings.captionMode || 'overlay';
+  if (mode === 'off') return;
+  if (mode === 'overlay' && tabId != null) {
+    try {
+      await chrome.scripting.executeScript({
+        target: { tabId },
+        files: ['content/overlay.js'],
+      });
+      overlayInjected = true;
+      chrome.tabs.sendMessage(tabId, { type: 'overlay-init', ephemeral }).catch(() => {});
+      return;
+    } catch (e) {
+      overlayInjected = false;
+      chrome.runtime.sendMessage({ type: 'overlay-fallback', reason: e.message }).catch(() => {});
+    }
+  }
+  // mode 'window' hoặc overlay thất bại → cửa sổ phụ đề riêng
+  chrome.windows.create({
+    url: chrome.runtime.getURL('live/live.html'),
+    type: 'popup',
+    width: 460,
+    height: 680,
+  });
+}
+
 let creatingOffscreen = null;
 
 async function ensureOffscreen() {
@@ -57,6 +126,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
             type: 'offscreen-start',
             streamId,
             settings,
+            ephemeral: !!msg.ephemeral,
             meta: { title: msg.tabTitle || 'Cuộc họp', tabId: msg.tabId },
           });
           sendResponse({ ok: true });
@@ -95,16 +165,20 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
               startedAt: msg.startedAt,
               title: msg.title,
               micUsed: msg.micUsed,
+              ephemeral: msg.ephemeral,
+              tabId: msg.tabId,
             },
           });
           setBadge('REC');
-          if (msg.openLiveWindow) {
-            chrome.windows.create({
-              url: chrome.runtime.getURL('live/live.html'),
-              type: 'popup',
-              width: 460,
-              height: 680,
-            });
+          recordingTabId = msg.tabId ?? null;
+          await setupCaptions(recordingTabId, msg.ephemeral);
+          break;
+        }
+
+        case 'live-partial':
+        case 'live-segment': {
+          if (overlayInjected && recordingTabId != null) {
+            chrome.tabs.sendMessage(recordingTabId, msg).catch(() => {});
           }
           break;
         }
@@ -112,6 +186,11 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
         case 'recording-stopped': {
           await chrome.storage.session.remove('recording');
           setBadge('…', '#f9ab00');
+          if (overlayInjected && recordingTabId != null) {
+            chrome.tabs.sendMessage(recordingTabId, msg).catch(() => {});
+          }
+          recordingTabId = null;
+          overlayInjected = false;
           break;
         }
 

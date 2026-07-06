@@ -1,5 +1,27 @@
 # DEVLOG — smart-assistant
 
+## 2026-07-06 — Implement spec 002: interview-first UX (23/23 task, 2 task có ghi chú)
+
+- **Onboarding 3 bước** tự mở sau cài (mic + notice pháp lý → ngôn ngữ → "nói thử một
+  câu" bằng chính giọng user — đổi từ video mẫu vì không có asset license-sạch, aha cá
+  nhân hơn). Benchmark chạy nền: đo RTF tiny/base, detect WebGPU → `lib/model-policy.js`
+  tự chọn model (user không cần biết model là gì), lưu `settings.bench`.
+- **WebGPU**: Transcriber nhận `device`, dtype fp16/q4 cho webgpu, tự hạ về wasm khi lỗi.
+- **Overlay phụ đề trong tab họp** (D4): content script shadow-DOM inject qua
+  activeTab+scripting lúc bắt đầu ghi (không host permission tĩnh); background relay
+  caption qua tabs.sendMessage (content script không nhận runtime broadcast); kéo-thả +
+  A± + prefs theo origin; lỗi inject → fallback cửa sổ live.
+- **i18n vi/en** (`_locales` + `lib/i18n.js` env-agnostic, test key-parity 2 locale).
+- **Chỉ phụ đề không lưu** (FR-027): ephemeral session — không recorder/chunk/record DB.
+- **Nudge domain họp** (FR-028): badge ● + notification 1 lần/tab, không bao giờ tự ghi.
+- **License Pro Ed25519 offline** (`lib/license.js`, WebCrypto — test sinh keypair/ký/
+  tamper/expiry bằng Node; `scripts/make-license.mjs` cho dev). Gate đầu tiên: Whisper
+  Small khi re-transcribe. Không network — đúng Constitution I.
+- **Store-ready**: `npm run pack` → zip 5.3MB; `docs/privacy-policy.md` vi+en; panel
+  "Dữ liệu của bạn" (đếm phiên, xóa toàn bộ 2 lớp confirm, link privacy).
+
+Gate: **55 unit + 16 E2E xanh**. Manual còn lại: G–M trong quickstart 002 (máy thật).
+
 ## 2026-07-06 — Implement spec 001: độ bền (crash-safe, phiên 3h, model UX, quota)
 
 Thực thi 23/26 task của `specs/001-meeting-assistant-core/tasks.md` (còn T008/T024-một-phần/

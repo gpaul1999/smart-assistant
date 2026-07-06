@@ -35,6 +35,16 @@ aside h1 { font-size: 17px; margin: 0 0 2px; }
 .quota-bar span.warn { background: #d97706; }
 .quota-bar span.critical { background: var(--danger); }
 
+.data-panel {
+  margin-top: 18px; padding-top: 12px; border-top: 1px solid var(--border);
+}
+.data-panel h3 { font-size: 13px; margin: 0 0 4px; }
+.danger-link {
+  background: none; border: 1px solid color-mix(in srgb, var(--danger) 40%, transparent);
+  color: var(--danger); border-radius: 8px; padding: 5px 10px; cursor: pointer; font-size: 12px;
+}
+.pro-tag { font-size: 10px; color: #d97706; margin-left: 3px; }
+
 main { flex: 1; overflow-y: auto; padding: 20px 28px; }
 .placeholder { display: flex; align-items: center; justify-content: center; opacity: 0.4; }
 
