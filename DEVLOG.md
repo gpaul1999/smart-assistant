@@ -1,5 +1,24 @@
 # DEVLOG — smart-assistant
 
+## 2026-07-06 — Spec 004: nguồn âm mọi nơi (tab / hệ thống / chỉ mic)
+
+Yêu cầu chủ dự án: "bật lên là nghe được cả hai bên, không nhất thiết Meet/Zoom/Teams".
+Làm rõ: tab mode vốn chạy mọi tab web (3 domain kia chỉ là notification nhắc); phần thiếu
+là app desktop + tình huống ngoài máy. Chốt (AskUserQuestion): thêm CẢ HAI chế độ.
+
+- **Hệ thống**: `chrome.desktopCapture.chooseDesktopMedia(['screen','window','audio'])`
+  từ background → streamId tiêu thụ trong offscreen bằng `chromeMediaSource:'desktop'`
+  (xin kèm video rồi dừng video track) — pipeline giữ nguyên chỗ cũ, mic vẫn kênh riêng
+  → GIỮ nhãn Bạn/Đối phương. Không passthrough (desktop capture không mute nguồn — tránh
+  vọng). Nguồn không có audio track (macOS hạn chế) → lỗi rõ, gợi ý Chỉ mic.
+  Lưu ý bảo mật trình duyệt: picker là bắt buộc mỗi phiên, không thể "cấp vĩnh viễn".
+- **Chỉ mic**: một chạm mọi nơi (mic đã cấp từ onboarding); EC/NS tắt để thu tiếng loa;
+  speaker=null (không gắn nhãn sai); Copilot xét câu hỏi trên mọi câu chốt.
+- `lib/source-mode.js` (thuần) là nguồn chân lý năng lực từng chế độ cho popup/background/
+  offscreen: {needsTab, needsPicker, hasSeparation, passthrough, overlayCapable} + tests.
+- Nguồn kết thúc đột ngột (Stop sharing / mic rút) → tự chốt phiên (mở rộng FR-020).
+- Permission mới: `desktopCapture`. Manifest 0.5.0. Gate: **70 unit + 20 E2E xanh**.
+
 ## 2026-07-06 — Implement spec 003: Copilot trả lời từ tài liệu (Pro) — 12/13 task
 
 - **DB v3**: stores `docsets`/`docs`; chunk tính sẵn lúc lưu tài liệu (trang `docs/`).

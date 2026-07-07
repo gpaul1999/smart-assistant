@@ -2,6 +2,7 @@ import { assess, fmtBytes } from '../lib/storage-policy.js';
 import { localize } from '../lib/i18n.js';
 import { verifyLicense, PROD_PUBLIC_KEY } from '../lib/license.js';
 import { listDocSets } from '../lib/db.js';
+import { sourceCapabilities } from '../lib/source-mode.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -13,6 +14,7 @@ const DEFAULT_SETTINGS = {
   captionMode: 'overlay',
   ephemeralDefault: false,
   meetingNudge: true,
+  sourceMode: 'tab',
 };
 
 let currentTab = null;
@@ -70,9 +72,10 @@ async function init() {
       settings: { ...cur, copilotDocsetId: $('copilot-docset').value || null },
     });
   });
-  for (const id of ['target-lang', 'source-lang', 'live-model', 'caption-mode', 'ephemeral']) {
+  for (const id of ['target-lang', 'source-lang', 'live-model', 'caption-mode', 'ephemeral', 'source-mode']) {
     $(id).addEventListener('change', saveSettings);
   }
+  $('source-mode').addEventListener('change', refreshTab);
 
   chrome.runtime.onMessage.addListener((msg) => {
     if (['recording-started', 'recording-stopped', 'pipeline-status', 'recording-error'].includes(msg.type)) {
@@ -111,6 +114,7 @@ async function loadSettings() {
   $('live-model').value = s.liveModel;
   $('caption-mode').value = s.captionMode;
   $('ephemeral').checked = s.ephemeralDefault;
+  $('source-mode').value = s.sourceMode || 'tab';
 }
 
 async function saveSettings() {
@@ -123,6 +127,7 @@ async function saveSettings() {
     liveModel: $('live-model').value,
     captionMode: $('caption-mode').value,
     ephemeralDefault: $('ephemeral').checked,
+    sourceMode: $('source-mode').value,
   };
   await chrome.storage.local.set({ settings });
 }
@@ -186,12 +191,14 @@ async function checkOnboarding() {
 async function refreshTab() {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   currentTab = tab;
+  const caps = sourceCapabilities($('source-mode').value);
   const capturable = tab?.url && /^https?:/.test(tab.url);
-  $('tab-title').textContent = tab?.title || '(không xác định)';
-  if (!capturable) {
-    showError('Tab này không ghi âm được — hãy mở tab cuộc họp (Google Meet, Zoom web…) rồi bấm lại icon extension.');
+  $('tab-title').textContent = caps.needsTab ? (tab?.title || '(không xác định)') : '(không cần tab — ' + $('source-mode').selectedOptions[0].textContent + ')';
+  if (caps.needsTab && !capturable) {
+    showError('Tab này không ghi âm được — hãy mở tab cuộc họp, hoặc đổi Nguồn âm sang Hệ thống / Chỉ mic.');
     $('toggle').disabled = true;
   } else {
+    hideError();
     $('toggle').disabled = quotaCritical; // FR-019: hết chỗ → không cho ghi mới
   }
 }
@@ -254,10 +261,12 @@ async function onToggle() {
       await chrome.runtime.sendMessage({ type: 'stop-recording' });
     } else {
       await saveSettings();
+      const mode = $('source-mode').value;
       const resp = await chrome.runtime.sendMessage({
         type: 'start-recording',
-        tabId: currentTab.id,
-        tabTitle: currentTab.title,
+        mode,
+        tabId: currentTab?.id,
+        tabTitle: sourceCapabilities(mode).needsTab ? currentTab?.title : 'Phiên ' + (mode === 'mic' ? 'mic' : 'hệ thống'),
         ephemeral: $('ephemeral').checked,
       });
       if (resp && !resp.ok) throw new Error(resp.error || 'Không bắt đầu được');

@@ -4,6 +4,7 @@
 import * as db from './lib/db.js';
 import { recoverInterrupted } from './lib/recovery.js';
 import { verifyLicense, PROD_PUBLIC_KEY } from './lib/license.js';
+import { sourceCapabilities } from './lib/source-mode.js';
 
 // Crash-safe recovery (FR-016): mỗi lần service worker khởi động lạnh, quét các phiên
 // 'recording' mồ côi (crash/kill trước đó) → ghép audio từ chunks, đánh dấu 'interrupted'.
@@ -62,11 +63,13 @@ chrome.notifications?.onClicked.addListener((id) => {
 let recordingTabId = null;
 let overlayInjected = false;
 
-async function setupCaptions(tabId, ephemeral) {
+async function setupCaptions(tabId, ephemeral, sourceMode = 'tab') {
   const { settings = {} } = await chrome.storage.local.get('settings');
   const mode = settings.captionMode || 'overlay';
   if (mode === 'off') return;
-  if (mode === 'overlay' && tabId != null) {
+  // FR-043: chế độ không-tab → không có chỗ overlay → ép cửa sổ riêng
+  const canOverlay = sourceCapabilities(sourceMode).overlayCapable;
+  if (mode === 'overlay' && canOverlay && tabId != null) {
     try {
       await chrome.scripting.executeScript({
         target: { tabId },
@@ -119,9 +122,22 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       switch (msg.type) {
         case 'start-recording': {
           await ensureOffscreen();
-          const streamId = await chrome.tabCapture.getMediaStreamId({
-            targetTabId: msg.tabId,
-          });
+          const mode = msg.mode || 'tab';
+          // FR-039/040: lấy nguồn "đối phương" theo chế độ
+          let streamId = null;
+          if (mode === 'tab') {
+            streamId = await chrome.tabCapture.getMediaStreamId({ targetTabId: msg.tabId });
+          } else if (mode === 'system') {
+            streamId = await new Promise((resolve, reject) => {
+              chrome.desktopCapture.chooseDesktopMedia(['screen', 'window', 'audio'], (id, opts) => {
+                if (!id) return reject(new Error('Bạn đã hủy chọn nguồn hệ thống'));
+                if (opts && opts.canRequestAudioTrack === false) {
+                  return reject(new Error('Nguồn được chọn không cho phép thu âm thanh — hãy tick "Chia sẻ âm thanh" (Windows) hoặc kiểm tra hỗ trợ của hệ điều hành'));
+                }
+                resolve(id);
+              });
+            });
+          } // mode 'mic': không cần streamId
           const { settings = {}, license, licensePubKey } = await chrome.storage.local.get([
             'settings', 'license', 'licensePubKey',
           ]);
@@ -134,6 +150,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
           await chrome.runtime.sendMessage({
             type: 'offscreen-start',
             streamId,
+            mode,
             settings,
             ephemeral: !!msg.ephemeral,
             copilot,
@@ -181,7 +198,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
           });
           setBadge('REC');
           recordingTabId = msg.tabId ?? null;
-          await setupCaptions(recordingTabId, msg.ephemeral);
+          await setupCaptions(recordingTabId, msg.ephemeral, msg.mode || 'tab');
           break;
         }
 

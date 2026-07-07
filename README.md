@@ -22,7 +22,7 @@ bạn chọn, và tóm tắt các điểm chính sau khi kết thúc.
 
 | | |
 |---|---|
-| 🔴 Ghi âm | Tab audio (speaker) qua `tabCapture` + microphone, mix thành một file `.webm` |
+| 🔴 Ghi âm | 3 nguồn: **Tab** (mọi trang web, tách kênh Bạn/Đối phương), **Hệ thống** (app desktop qua picker chia sẻ, vẫn tách kênh), **Chỉ mic** (mọi nơi một chạm — phỏng vấn trực tiếp/điện thoại mở loa, không nhãn người nói) + microphone, mix thành `.webm` |
 | 📝 Phiên âm live | Whisper (tiny/base/small) chạy **local** (transformers.js + WASM); phụ đề tạm cập nhật mỗi ~1.2s (mục tiêu ≤2s sau khi nói), chốt câu kèm dịch khi ngắt hơi ~0.45s |
 | 🌐 Dịch live | Chrome **Translator API** (Gemini Nano, **on-device**) — phụ đề song ngữ realtime |
 | 🗣️ Ai đang nói | Gắn nhãn "Bạn" / "Đối phương" theo năng lượng âm của từng nguồn (mic vs tab) |

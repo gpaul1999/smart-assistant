@@ -23,6 +23,7 @@ import { listDocs } from '../lib/db.js';
 import { buildIndex, search, chunkText } from '../lib/retrieval.js';
 import { isQuestion } from '../lib/question.js';
 import { synthesizeAnswer } from '../lib/prompter.js';
+import { sourceCapabilities, micConstraints } from '../lib/source-mode.js';
 
 const SR = 16000;
 const PARTIAL_TICK_MS = 1200; // nhịp phiên âm "tạm" — mục tiêu phụ đề hiện ≤2s sau khi nói
@@ -109,9 +110,10 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
 
 // ---------------------------------------------------------------- ghi âm
 
-async function startRecording({ streamId, settings, meta, ephemeral = false, copilot = null }) {
+async function startRecording({ streamId, settings, meta, ephemeral = false, copilot = null, mode = 'tab' }) {
   if (session) throw new Error('Đang có phiên ghi âm khác');
   const cfg = { ...DEFAULT_SETTINGS, ...settings };
+  const caps = sourceCapabilities(mode);
 
   // spec 003: nạp kho tài liệu Copilot (đã gate Pro ở background — FR-037)
   let copilotIndex = null;
@@ -130,28 +132,45 @@ async function startRecording({ streamId, settings, meta, ephemeral = false, cop
     }
   }
 
-  // Audio của tab (speaker của cuộc họp)
-  const tabStream = await navigator.mediaDevices.getUserMedia({
-    audio: {
-      mandatory: { chromeMediaSource: 'tab', chromeMediaSourceId: streamId },
-    },
-    video: false,
-  });
-
-  // Mic — tuỳ chọn: chưa cấp quyền vẫn ghi được phía tab
-  let micStream = null;
-  try {
-    micStream = await navigator.mediaDevices.getUserMedia({
-      audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+  // Nguồn "đối phương" theo chế độ (spec 004 FR-039/040): tab / hệ thống / không có (mic-only)
+  let themStream = null;
+  if (mode === 'tab') {
+    themStream = await navigator.mediaDevices.getUserMedia({
+      audio: { mandatory: { chromeMediaSource: 'tab', chromeMediaSourceId: streamId } },
+      video: false,
     });
-  } catch {
-    // không có quyền mic
+  } else if (mode === 'system') {
+    // desktopCapture bắt buộc xin kèm video — lấy xong dừng ngay video track
+    const desktop = await navigator.mediaDevices.getUserMedia({
+      audio: { mandatory: { chromeMediaSource: 'desktop', chromeMediaSourceId: streamId } },
+      video: { mandatory: { chromeMediaSource: 'desktop', chromeMediaSourceId: streamId } },
+    });
+    for (const t of desktop.getVideoTracks()) t.stop();
+    if (!desktop.getAudioTracks().length) {
+      for (const t of desktop.getTracks()) t.stop();
+      throw new Error('Nguồn hệ thống không có âm thanh — trên Windows hãy tick "Chia sẻ âm thanh hệ thống"; macOS có thể không hỗ trợ (dùng chế độ Chỉ mic).');
+    }
+    themStream = new MediaStream(desktop.getAudioTracks());
   }
 
-  // tabCapture làm tab bị mute → phát lại cho người dùng nghe (context sample rate gốc)
-  const playCtx = new AudioContext();
-  playCtx.createMediaStreamSource(tabStream).connect(playCtx.destination);
-  await playCtx.resume();
+  // Mic: bắt buộc ở chế độ mic-only; tuỳ chọn ở các chế độ khác.
+  // mic-only tắt EC/NS để không triệt tiếng đối phương phát qua loa (FR-041).
+  let micStream = null;
+  try {
+    micStream = await navigator.mediaDevices.getUserMedia({ audio: micConstraints(mode) });
+  } catch (e) {
+    if (mode === 'mic') throw new Error('Chế độ Chỉ mic cần quyền microphone: ' + e.message);
+    // các chế độ khác: không có mic vẫn ghi được phía đối phương
+  }
+
+  // tabCapture làm tab bị mute → phát lại cho người dùng nghe. Desktop capture KHÔNG mute
+  // nguồn nên không passthrough (tránh vọng — FR-040).
+  let playCtx = null;
+  if (caps.passthrough && themStream) {
+    playCtx = new AudioContext();
+    playCtx.createMediaStreamSource(themStream).connect(playCtx.destination);
+    await playCtx.resume();
+  }
 
   // Context 16kHz: mix để ghi file + tap PCM để phiên âm live
   const ctx = new AudioContext({ sampleRate: SR });
@@ -162,9 +181,11 @@ async function startRecording({ streamId, settings, meta, ephemeral = false, cop
   });
   const mixDest = ctx.createMediaStreamDestination();
 
-  const tabSrc = ctx.createMediaStreamSource(tabStream);
-  tabSrc.connect(tap, 0, 1);
-  tabSrc.connect(mixDest);
+  if (themStream) {
+    const themSrc = ctx.createMediaStreamSource(themStream);
+    themSrc.connect(tap, 0, 1);
+    themSrc.connect(mixDest);
+  }
   if (micStream) {
     const micSrc = ctx.createMediaStreamSource(micStream);
     micSrc.connect(tap, 0, 0);
@@ -172,9 +193,10 @@ async function startRecording({ streamId, settings, meta, ephemeral = false, cop
   }
   await ctx.resume();
 
-  // Tab họp đóng đột ngột → track kết thúc → chốt phiên như bấm dừng (FR-020)
-  tabStream.getAudioTracks()[0]?.addEventListener('ended', () => {
-    if (session && !session.stopped) stopRecording().catch((e) => console.error('[tab-ended]', e));
+  // Nguồn kết thúc đột ngột (tab đóng / Stop sharing / mic rút) → chốt phiên (FR-020/042)
+  const watchTrack = themStream?.getAudioTracks()[0] || micStream?.getAudioTracks()[0];
+  watchTrack?.addEventListener('ended', () => {
+    if (session && !session.stopped) stopRecording().catch((e) => console.error('[source-ended]', e));
   });
 
   const meetingId = uid();
@@ -204,8 +226,9 @@ async function startRecording({ streamId, settings, meta, ephemeral = false, cop
   session = {
     id: meetingId,
     cfg,
+    mode,
     startedAt,
-    tabStream,
+    themStream,
     micStream,
     playCtx,
     ctx,
@@ -239,6 +262,7 @@ async function startRecording({ streamId, settings, meta, ephemeral = false, cop
       targetLang: cfg.targetLang,
       micUsed: !!micStream,
       liveModel: cfg.liveModel,
+      sourceMode: mode,
       copilotDocsetId: copilot?.docsetId || null,
     });
   }
@@ -253,6 +277,7 @@ async function startRecording({ streamId, settings, meta, ephemeral = false, cop
     title: meta.title,
     micUsed: !!micStream,
     ephemeral,
+    mode,
     tabId: meta.tabId,
   });
 }
@@ -270,7 +295,7 @@ async function stopRecording() {
       s.recorder.stop();
     });
   }
-  for (const t of [...s.tabStream.getTracks(), ...(s.micStream?.getTracks() || [])]) t.stop();
+  for (const t of [...(s.themStream?.getTracks() || []), ...(s.micStream?.getTracks() || [])]) t.stop();
 
   broadcast({ type: 'recording-stopped', meetingId: s.id });
 
@@ -279,7 +304,7 @@ async function stopRecording() {
   await s.queue; // chờ hàng đợi phiên âm live xử lý xong
 
   await s.ctx.close().catch(() => {});
-  await s.playCtx.close().catch(() => {});
+  await s.playCtx?.close().catch(() => {});
 
   if (s.ephemeral) {
     // không có gì để lưu — đúng lời hứa "chỉ phụ đề" (SC-013)
@@ -340,8 +365,10 @@ function enqueueSegment({ mic, tab, t0, t1 }) {
   if (!s) return;
   s.queue = s.queue
     .then(async () => {
-      const speaker = labelSpeaker(rmsOf(mic), rmsOf(tab));
-      if (!speaker) return; // im lặng
+      const rawSpeaker = labelSpeaker(rmsOf(mic), rmsOf(tab));
+      if (!rawSpeaker) return; // im lặng
+      // mic-only: hai bên trộn một kênh → không gắn nhãn sai (FR-041)
+      const speaker = s.mode === 'mic' ? null : rawSpeaker;
 
       const mixed = mixdown(mic, tab);
       const { text } = await runExclusive(() =>
@@ -466,7 +493,9 @@ async function reprocess(meetingId, model) {
 // Nano chạy runtime riêng, không đụng mutex Whisper (FR-038).
 async function handleCopilot(s, segment) {
   try {
-    if (!s.copilotIndex || segment.speaker !== 'them' || !isQuestion(segment.text)) return;
+    // mic-only không có nhãn nguồn → xét câu hỏi trên mọi câu chốt (FR-041)
+    const fromThem = s.mode === 'mic' ? true : segment.speaker === 'them';
+    if (!s.copilotIndex || !fromThem || !isQuestion(segment.text)) return;
 
     const hits = search(s.copilotIndex, [segment.text, segment.translation], { k: 3 });
     if (!hits.length) return; // dưới ngưỡng tin cậy → im lặng (FR-034)

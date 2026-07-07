@@ -404,6 +404,26 @@ test('popup: có select Copilot tài liệu + viewer có nút rà soát (gate Pr
   await page.close();
 });
 
+test('nguồn âm (004): 3 chế độ; Chỉ mic bật được nút ghi dù không có tab hợp lệ', async () => {
+  const page = await context.newPage();
+  await page.goto(extUrl('popup/popup.html'));
+  await expect(page.locator('#source-mode option')).toHaveCount(3);
+
+  // popup đang mở trong tab chrome-extension:// → chế độ Tab bị chặn
+  await expect(page.locator('#toggle')).toBeDisabled();
+
+  // chuyển sang Chỉ mic → không cần tab → nút ghi bật (SC-021, FR-039)
+  await page.locator('#source-mode').selectOption('mic');
+  await expect(page.locator('#toggle')).toBeEnabled();
+  await expect(page.locator('#tab-title')).toContainText('không cần tab');
+
+  // setting được nhớ
+  await page.reload();
+  await expect(page.locator('#source-mode')).toHaveValue('mic');
+  await page.locator('#source-mode').selectOption('tab'); // trả về mặc định cho test khác
+  await page.close();
+});
+
 test('trang cấp quyền mic render đúng', async () => {
   const page = await context.newPage();
   await page.goto(extUrl('permission/permission.html'));
