@@ -4,6 +4,15 @@
 import * as db from './lib/db.js';
 import { recoverInterrupted } from './lib/recovery.js';
 import { sourceCapabilities } from './lib/source-mode.js';
+import { appendError } from './lib/diag.js';
+
+// Ring buffer lỗi cho "Xuất chẩn đoán" (F6) — chỉ metadata, không nội dung họp
+async function logError(message) {
+  try {
+    const { errlog = [] } = await chrome.storage.local.get('errlog');
+    await chrome.storage.local.set({ errlog: appendError(errlog, message) });
+  } catch {}
+}
 
 // Crash-safe recovery (FR-016): mỗi lần service worker khởi động lạnh, quét các phiên
 // 'recording' mồ côi (crash/kill trước đó) → ghép audio từ chunks, đánh dấu 'interrupted'.
@@ -27,36 +36,8 @@ chrome.runtime.onInstalled.addListener((details) => {
   }
 });
 
-// FR-028: nhắc ghi khi vào domain họp (badge + notification 1 lần/tab, KHÔNG tự ghi)
-const MEETING_HOSTS = /(^|\.)meet\.google\.com$|(^|\.)zoom\.us$|(^|\.)teams\.microsoft\.com$|(^|\.)teams\.live\.com$/;
-const nudgedTabs = new Set();
-chrome.tabs.onRemoved.addListener((tabId) => nudgedTabs.delete(tabId));
-chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
-  if (changeInfo.status !== 'complete' || !tab.url) return;
-  let host = '';
-  try { host = new URL(tab.url).hostname; } catch { return; }
-  if (!MEETING_HOSTS.test(host)) return;
-  chrome.action.setBadgeText({ tabId, text: '●' });
-  chrome.action.setBadgeBackgroundColor({ tabId, color: '#2563eb' });
-  const { settings = {} } = await chrome.storage.local.get('settings');
-  if (settings.meetingNudge === false || nudgedTabs.has(tabId)) return;
-  const { recording } = await chrome.storage.session.get('recording');
-  if (recording) return; // FR-005: đang ghi phiên khác thì không nhắc
-  nudgedTabs.add(tabId);
-  chrome.notifications?.create(`nudge-${tabId}`, {
-    type: 'basic',
-    iconUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
-    title: 'Smart Meeting Assistant',
-    message: 'Bạn đang ở tab cuộc họp — bấm icon extension để ghi + phụ đề dịch trực tiếp.',
-  });
-});
-chrome.notifications?.onClicked.addListener((id) => {
-  if (!id.startsWith('nudge-')) return;
-  const tabId = Number(id.slice(6));
-  chrome.tabs.update(tabId, { active: true });
-  chrome.action.openPopup?.().catch(() => {}); // best-effort (R6)
-  chrome.notifications.clear(id);
-});
+// (Nudge domain họp đã gỡ ở bản store đầu — quyết định F3 ops-review 2026-07-06:
+// bỏ permission 'tabs' + 'notifications' cho hồ sơ review nhẹ; sẽ cân nhắc thêm lại sau.)
 
 // FR-024: content script không nhận runtime broadcast → relay caption qua tabs.sendMessage
 let recordingTabId = null;
@@ -221,12 +202,16 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
         case 'recording-error': {
           await chrome.storage.session.remove('recording');
           setBadge('ERR');
+          await logError(`recording-error: ${msg.error || ''}`);
           break;
         }
 
         case 'pipeline-status': {
           if (msg.status === 'done') setBadge('');
-          if (msg.status === 'error') setBadge('ERR');
+          if (msg.status === 'error') {
+            setBadge('ERR');
+            await logError(`pipeline-error [${msg.meetingId || ''}]: ${msg.error || ''}`);
+          }
           break;
         }
       }

@@ -5,6 +5,7 @@ import { Transcriber, isNoiseTranscript } from '../lib/transcriber.js';
 import { translateText } from '../lib/translator.js';
 import { pickModels, canRealtime } from '../lib/model-policy.js';
 import { localize } from '../lib/i18n.js';
+import { checkCapabilities, STATUS_ICON } from '../lib/capabilities.js';
 
 const $ = (id) => document.getElementById(id);
 const SR = 16000;
@@ -109,10 +110,13 @@ function startBenchmark() {
       $('prep').hidden = true;
       const el = $('bench-result');
       el.hidden = false;
+      const caps = await checkCapabilities();
       el.textContent =
         chrome.i18n.getMessage('onbBenchDone') +
         `${picked.liveModel.split('/')[1]} (${device})` +
-        (canRealtime({ rtfTiny }) ? '' : ' — máy chậm, phụ đề sẽ trễ hơn 2s');
+        (canRealtime({ rtfTiny }) ? '' : ' — máy chậm, phụ đề sẽ trễ hơn 2s') +
+        ' · ' +
+        caps.map((c) => `${STATUS_ICON[c.status]} ${c.label.split(' (')[0]}`).join(' · ');
       $('speak').disabled = false;
     } catch (e) {
       // Không có mạng/model → vẫn cho đi tiếp, offscreen sẽ tải khi ghi thật

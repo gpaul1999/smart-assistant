@@ -56,13 +56,29 @@ export class Transcriber {
                 : 'q8',
             progress_callback: (p) => this.onProgress?.(p),
           });
+        // Retry 1 lần khi tải model lỗi (mạng yếu/HF chập chờn — ops-review F4);
+        // Cache API giữ phần đã tải nên lần thử lại tiếp tục nhanh hơn.
+        const withRetry = async (fn) => {
+          try {
+            return await fn();
+          } catch (e) {
+            console.warn('[transcriber] tải model lỗi, thử lại sau 2s:', e.message);
+            await new Promise((r) => setTimeout(r, 2000));
+            return fn();
+          }
+        };
         return device === 'webgpu'
-          ? make('webgpu').catch((e) => {
+          ? withRetry(() => make('webgpu')).catch((e) => {
               console.warn('[transcriber] webgpu init lỗi, hạ về wasm:', e.message);
               this._key = `${model}|wasm`;
-              return make('wasm');
+              return withRetry(() => make('wasm'));
             })
-          : make(device);
+          : withRetry(() => make(device));
+      });
+      // thất bại chung cuộc → cho phép lần gọi sau thử lại từ đầu thay vì kẹt promise lỗi
+      this._pipePromise = this._pipePromise.catch((e) => {
+        this._key = null;
+        throw e;
       });
     }
     return this._pipePromise;

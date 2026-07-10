@@ -1,5 +1,13 @@
 # DEVLOG — smart-assistant
 
+## 2026-07-06 — Gói A ops-hardening (manifest 0.6.0)
+
+3 quyết định founder: Gói A trước beta; giá $4.99/mo · $29/năm key exp 1 năm; bỏ nudge
+(gỡ permission tabs + notifications). Ship: capabilities check (onboarding + viewer panel),
+xuất chẩn đoán local (errlog ring buffer, test chống rò nội dung), hint nguồn âm, retry
+tải model + reset failed promise, docs/store-listing.md (justification permission),
+xuất .srt/.vtt. Gate: 82 unit + 20 E2E xanh; zip 0.6.0 sẵn sàng nộp store.
+
 ## 2026-07-06 — Ops review (gstack plan-ceo-review): khả thi vận hành + kiếm tiền
 
 Biên bản: `docs/ops-review-2026-07-06.md`. 9 findings: 2 CRITICAL (F1 Gemini Nano

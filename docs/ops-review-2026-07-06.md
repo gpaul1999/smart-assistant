@@ -140,3 +140,21 @@ B1 chỉ làm sâu thêm giá trị lúc mua.
 2. Dogfood 2 buổi thật — đo F1/F2 bằng máy thật.
 3. Chốt giá + cổng thanh toán; sinh keypair production (`make-license.mjs --keygen`, cất
    private key an toàn); mốc store beta 30 ngày.
+
+
+---
+
+## Quyết định đã chốt (founder, 2026-07-06) + trạng thái Gói A
+
+| Quyết định | Chốt |
+|---|---|
+| Bước tiếp theo | **Gói A ops-hardening** → nộp store beta |
+| Giá Pro | **$4.99/tháng · $29/năm** (VN 99k/599k), key `exp` 1 năm |
+| F3 trim permission | **Bỏ nudge bản đầu** (gỡ `tabs` + `notifications`) |
+
+**Gói A đã ship cùng ngày** (manifest 0.6.0): A1 Năng lực máy (onboarding + panel viewer,
+`lib/capabilities.js`), A2 Xuất chẩn đoán local (`lib/diag.js` + errlog ring buffer trong
+background — không chứa nội dung họp, test chống rò), A3 hint theo nguồn âm trong popup,
+A4 retry tải model + reset promise lỗi (`transcriber.js`), A5 gỡ nudge + `docs/store-listing.md`
+(justification từng permission, yêu cầu hệ thống trung thực), A6 xuất `.srt` (+`buildVtt`)
+từ thư viện. Gate: **82 unit + 20 E2E xanh**, zip 0.6.0.

@@ -75,7 +75,8 @@ async function init() {
   for (const id of ['target-lang', 'source-lang', 'live-model', 'caption-mode', 'ephemeral', 'source-mode']) {
     $(id).addEventListener('change', saveSettings);
   }
-  $('source-mode').addEventListener('change', refreshTab);
+  $('source-mode').addEventListener('change', () => { refreshTab(); refreshSourceHint(); });
+  refreshSourceHint();
 
   chrome.runtime.onMessage.addListener((msg) => {
     if (['recording-started', 'recording-stopped', 'pipeline-status', 'recording-error'].includes(msg.type)) {
@@ -86,6 +87,16 @@ async function init() {
         msg.progress >= 100 ? '✔ sẵn sàng' : `${Math.round(msg.progress)}%`;
     }
   });
+}
+
+// A3 (ops-review F7): hint theo chế độ nguồn — tránh dùng sai chỗ
+const SOURCE_HINTS = {
+  tab: 'Ghi tab đang mở — dùng cho họp trong Chrome (Meet, Zoom web…).',
+  system: 'Chọn màn hình + tick "Chia sẻ âm thanh" mỗi phiên — dùng cho app desktop (Zoom, Teams…). macOS có thể không hỗ trợ âm thanh hệ thống.',
+  mic: 'Dùng cho gặp trực tiếp / điện thoại mở loa. Họp trong Chrome hãy chọn "Tab này" — Chỉ mic sẽ không tách được ai nói.',
+};
+function refreshSourceHint() {
+  $('source-hint').textContent = SOURCE_HINTS[$('source-mode').value] || '';
 }
 
 // FR-019: hiển thị mức dùng lưu trữ; critical → chặn phiên ghi mới

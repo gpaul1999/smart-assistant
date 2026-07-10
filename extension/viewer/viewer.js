@@ -7,6 +7,9 @@ import { listDocs } from '../lib/db.js';
 import { buildIndex, search, chunkText } from '../lib/retrieval.js';
 import { pairQA } from '../lib/question.js';
 import { reviewAnswer, promptApiAvailable } from '../lib/prompter.js';
+import { checkCapabilities, STATUS_ICON, STATUS_LABEL } from '../lib/capabilities.js';
+import { buildDiagnostics } from '../lib/diag.js';
+import { buildSrt } from '../lib/format.js';
 
 const $ = (id) => document.getElementById(id);
 const STATUS_LABELS = {
@@ -80,6 +83,15 @@ async function init() {
     });
   });
   $('d-review').addEventListener('click', runReview);
+  $('d-export-srt').addEventListener('click', async () => {
+    const m = await getMeeting(currentId);
+    download(`${fileBase(m)}.srt`, new Blob([buildSrt(m)], { type: 'text/plain' }));
+  });
+
+  // A1: Năng lực máy — nói thẳng tính năng nào chạy trên máy này (ops-review F1)
+  renderCapabilities();
+  // A2: Xuất chẩn đoán local (ops-review F6)
+  $('dp-diag').addEventListener('click', exportDiagnostics);
 
   $('d-delete').addEventListener('click', async () => {
     if (!confirm('Xóa vĩnh viễn cuộc họp này (audio + transcript + tóm tắt)?')) return;
@@ -180,6 +192,31 @@ function renderReview(review) {
     div.querySelector('.rv').textContent = r.verdict;
     wrap.appendChild(div);
   }
+}
+
+async function renderCapabilities() {
+  const caps = await checkCapabilities();
+  const ul = $('dp-caps');
+  ul.innerHTML = '';
+  for (const c of caps) {
+    const li = document.createElement('li');
+    li.textContent = `${STATUS_ICON[c.status]} ${c.label} — ${STATUS_LABEL[c.status]}`;
+    ul.appendChild(li);
+  }
+}
+
+async function exportDiagnostics() {
+  const { settings = {}, errlog = [] } = await chrome.storage.local.get(['settings', 'errlog']);
+  const est = navigator.storage?.estimate ? await navigator.storage.estimate() : null;
+  const diag = buildDiagnostics({
+    version: chrome.runtime.getManifest().version,
+    settings,
+    capabilities: await checkCapabilities(),
+    errlog,
+    meetingsCount: (await listMeetings()).length,
+    storage: est ? { usage: est.usage, quota: est.quota } : null,
+  });
+  download('smart-assistant-diagnostics.json', new Blob([JSON.stringify(diag, null, 2)], { type: 'application/json' }));
 }
 
 // FR-030: panel Dữ liệu của bạn

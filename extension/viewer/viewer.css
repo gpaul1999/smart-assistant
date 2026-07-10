@@ -96,3 +96,7 @@ body.hide-trans .seg-trans { display: none; }
 .review-item .rq { font-weight: 600; }
 .review-item .ra { opacity: 0.8; font-size: 13px; margin: 4px 0; }
 .review-item .rv { white-space: pre-wrap; font: 12px/1.5 inherit; color: #16a34a; margin: 4px 0 0; }
+
+.caps { list-style: none; margin: 4px 0 8px; padding: 0; font-size: 12px; opacity: 0.85; }
+.caps li { padding: 1px 0; }
+.link-like { background: none; border: 0; color: var(--accent); cursor: pointer; font-size: 12px; padding: 0; }

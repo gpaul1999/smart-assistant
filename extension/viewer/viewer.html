@@ -23,6 +23,9 @@
         <h3 data-i18n="vwDataPanelTitle">🔒 Dữ liệu của bạn</h3>
         <p class="note" data-i18n="vwDataPanelDesc"></p>
         <p class="note"><span id="dp-count"></span></p>
+        <h3>🖥️ Năng lực máy</h3>
+        <ul id="dp-caps" class="caps"></ul>
+        <button id="dp-diag" class="link-like">📋 Xuất chẩn đoán (file local, tự đính kèm khi báo lỗi)</button>
         <p class="note">
           <a href="https://github.com/gpaul1999/smart-assistant/blob/main/docs/privacy-policy.md"
              target="_blank" data-i18n="vwPrivacyLink">Chính sách quyền riêng tư</a>
@@ -72,6 +75,7 @@
         <button id="d-export-md">⬇ Markdown</button>
         <button id="d-export-json">⬇ JSON</button>
         <button id="d-export-audio">⬇ Audio</button>
+        <button id="d-export-srt">⬇ SRT</button>
         <select id="d-model">
           <option value="Xenova/whisper-base">Whisper Base</option>
           <option value="Xenova/whisper-small">Whisper Small (chính xác)</option>

@@ -79,3 +79,32 @@ export function buildMarkdown(meeting) {
   }
   return lines.join('\n');
 }
+
+/** giây → "HH:MM:SS,mmm" (SRT) hoặc "HH:MM:SS.mmm" (VTT) */
+export function secToTimestamp(sec, sep = ',') {
+  const ms = Math.max(0, Math.round((sec || 0) * 1000));
+  const h = String(Math.floor(ms / 3600000)).padStart(2, '0');
+  const m = String(Math.floor((ms % 3600000) / 60000)).padStart(2, '0');
+  const s2 = String(Math.floor((ms % 60000) / 1000)).padStart(2, '0');
+  const mmm = String(ms % 1000).padStart(3, '0');
+  return `${h}:${m}:${s2}${sep}${mmm}`;
+}
+
+/** Xuất phụ đề SRT từ segments (kèm bản dịch nếu có — dòng thứ hai). */
+export function buildSrt(meeting) {
+  const blocks = (meeting.segments || []).map((seg, i) => {
+    const t1 = seg.t1 ?? seg.t0 + 3;
+    const text = seg.translation ? `${seg.text}\n${seg.translation}` : seg.text;
+    return `${i + 1}\n${secToTimestamp(seg.t0)} --> ${secToTimestamp(t1)}\n${text}`;
+  });
+  return blocks.join('\n\n') + (blocks.length ? '\n' : '');
+}
+
+export function buildVtt(meeting) {
+  const blocks = (meeting.segments || []).map((seg) => {
+    const t1 = seg.t1 ?? seg.t0 + 3;
+    const text = seg.translation ? `${seg.text}\n${seg.translation}` : seg.text;
+    return `${secToTimestamp(seg.t0, '.')} --> ${secToTimestamp(t1, '.')}\n${text}`;
+  });
+  return 'WEBVTT\n\n' + blocks.join('\n\n') + (blocks.length ? '\n' : '');
+}
