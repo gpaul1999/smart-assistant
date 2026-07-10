@@ -15,6 +15,7 @@ async function init() {
   document.getElementById('stop').addEventListener('click', async () => {
     await chrome.runtime.sendMessage({ type: 'stop-recording' });
   });
+  document.getElementById('pin').addEventListener('click', togglePin);
 
   const { recording } = await chrome.storage.session.get('recording');
   if (recording) {
@@ -23,6 +24,10 @@ async function init() {
     document.getElementById('stop').hidden = false;
     if (!recording.micUsed) {
       showNotice('Mic chưa được cấp quyền — chỉ phiên âm được phía đối phương.');
+    }
+    // FR-047: nguồn không phải tab → user sẽ rời Chrome → gợi ý ghim nổi
+    if (recording.mode && recording.mode !== 'tab' && 'documentPictureInPicture' in window) {
+      showNotice('💡 Bấm "📌 Ghim nổi" để phụ đề luôn hiển thị trên app họp (Zoom, Teams…).');
     }
     const meeting = await getMeeting(meetingId);
     for (const seg of meeting?.segments || []) renderSegment(seg);
@@ -124,4 +129,50 @@ function renderCard(card) {
     exs.appendChild(d);
   }
   if (card.suggestion) cardEl.querySelector('.sug').textContent = `💡 ${card.suggestion.text}`;
+}
+
+// ---- spec 005: Ghim nổi bằng Document Picture-in-Picture (always-on-top toàn hệ điều hành)
+let pipWin = null;
+
+async function togglePin() {
+  const btn = document.getElementById('pin');
+  if (pipWin) {
+    pipWin.close();
+    return; // pagehide sẽ dọn
+  }
+  if (!('documentPictureInPicture' in window)) {
+    showNotice('Trình duyệt chưa hỗ trợ cửa sổ ghim nổi (cần Chrome 116+).'); // FR-046
+    return;
+  }
+  try {
+    pipWin = await documentPictureInPicture.requestWindow({ width: 420, height: 320 });
+  } catch (e) {
+    showNotice('Không mở được cửa sổ ghim nổi: ' + e.message);
+    pipWin = null;
+    return;
+  }
+  window.__smaPipOpen = true; // hook E2E
+
+  // Style + nền giống cửa sổ phụ đề; DI CHUYỂN feed (một nguồn render duy nhất — FR-045)
+  const link = pipWin.document.createElement('link');
+  link.rel = 'stylesheet';
+  link.href = chrome.runtime.getURL('live/live.css');
+  pipWin.document.head.appendChild(link);
+  pipWin.document.body.style.cssText = 'margin:0;background:#101418;color:#e8eaed;overflow-y:auto;';
+  pipWin.document.body.appendChild(feed);
+  if (cardEl) pipWin.document.body.appendChild(cardEl);
+
+  btn.textContent = '📌 Bỏ ghim';
+  btn.classList.add('active');
+
+  pipWin.addEventListener('pagehide', () => {
+    // trả feed + card về cửa sổ thường, phiên không gián đoạn
+    const footer = document.querySelector('footer');
+    document.body.insertBefore(feed, footer);
+    if (cardEl) document.body.insertBefore(cardEl, footer);
+    pipWin = null;
+    window.__smaPipOpen = false;
+    btn.textContent = '📌 Ghim nổi';
+    btn.classList.remove('active');
+  });
 }

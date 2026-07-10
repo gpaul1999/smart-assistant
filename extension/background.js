@@ -170,6 +170,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
               title: msg.title,
               micUsed: msg.micUsed,
               ephemeral: msg.ephemeral,
+              mode: msg.mode,
               tabId: msg.tabId,
             },
           });

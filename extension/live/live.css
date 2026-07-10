@@ -46,3 +46,10 @@ footer {
 }
 .answer-card .q { opacity: .7; font-size: 11px; margin-bottom: 4px; }
 .answer-card .sug { color: #9be8a8; font-weight: 600; margin-top: 6px; }
+
+.head-actions { display: flex; gap: 8px; }
+.pin {
+  background: #2563eb; color: #fff; border: 0; border-radius: 8px;
+  padding: 7px 12px; font-weight: 600; cursor: pointer;
+}
+.pin.active { background: #16a34a; }

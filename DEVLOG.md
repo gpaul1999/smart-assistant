@@ -1,5 +1,17 @@
 # DEVLOG — smart-assistant
 
+## 2026-07-10 — 005 Phụ đề ghim nổi: Document PiP (manifest 0.7.0)
+
+Trả lời câu hỏi "overlay kiểu Discord khi user ở tab/app khác": extension KHÔNG thể vẽ
+đè lên app desktop (cần hook OS-level), nhưng Document Picture-in-Picture (Chrome 116+)
+cho cửa sổ mini always-on-top toàn hệ điều hành, chứa DOM tùy ý. Ship: nút "📌 Ghim nổi"
+trong cửa sổ phụ đề — DI CHUYỂN feed + answer-card vào PiP (một nguồn render duy nhất,
+FR-045), đóng PiP trả về nguyên trạng; thiếu API → thông báo Chrome 116+ (FR-046);
+chế độ Hệ thống/Chỉ mic tự gợi ý ghim nổi lúc mở (FR-047, đúng lúc user rời Chrome).
+Giới hạn thành thật: 1 PiP/lúc, không nổi trên game fullscreen exclusive; overlay native
+click-through thật = companion app (Native Messaging) — roadmap sau tín hiệu cầu.
+Gate: 82 unit + 21 E2E xanh (test PiP mở thật trong Chromium).
+
 ## 2026-07-06 — Gói A ops-hardening (manifest 0.6.0)
 
 3 quyết định founder: Gói A trước beta; giá $4.99/mo · $29/năm key exp 1 năm; bỏ nudge

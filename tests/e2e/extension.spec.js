@@ -432,6 +432,35 @@ test('nguồn âm (004): 3 chế độ; Chỉ mic bật được nút ghi dù kh
   await page.close();
 });
 
+test('ghim nổi (005): nút hiện trong cửa sổ phụ đề; bấm → PiP mở hoặc thông báo rõ, không crash', async () => {
+  const page = await context.newPage();
+  await page.goto(extUrl('live/live.html'));
+  const pin = page.locator('#pin');
+  await expect(pin).toBeVisible();
+
+  await pin.click();
+  await page.waitForTimeout(500);
+  const state = await page.evaluate(() => ({
+    supported: 'documentPictureInPicture' in window,
+    pipOpen: !!window.__smaPipOpen,
+    noticeVisible: !document.getElementById('notice').hidden,
+    feedStillHere: !!document.getElementById('feed'),
+  }));
+  if (state.supported) {
+    // headless có thể mở được hoặc từ chối — cả hai đều phải được xử lý êm
+    expect(state.pipOpen || state.noticeVisible).toBe(true);
+    if (state.pipOpen) {
+      expect(state.feedStillHere).toBe(false); // feed đã DI CHUYỂN vào PiP (FR-045)
+      await pin.click(); // bỏ ghim
+      await page.waitForTimeout(300);
+      expect(await page.evaluate(() => !!document.getElementById('feed'))).toBe(true);
+    }
+  } else {
+    expect(state.noticeVisible).toBe(true); // FR-046
+  }
+  await page.close();
+});
+
 test('trang cấp quyền mic render đúng', async () => {
   const page = await context.newPage();
   await page.goto(extUrl('permission/permission.html'));
