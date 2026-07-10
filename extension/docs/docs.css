@@ -25,3 +25,8 @@ button { padding: 7px 12px; border: 1px solid var(--border); border-radius: 8px;
   background: transparent; color: inherit; cursor: pointer; }
 button:hover { border-color: var(--accent); }
 .danger { color: var(--danger); margin-top: 16px; }
+
+.add-actions { display: flex; gap: 10px; align-items: center; }
+.file-import { border: 1px dashed var(--border); border-radius: 8px; padding: 7px 12px; cursor: pointer; }
+.file-import:hover { border-color: var(--accent); }
+.limit-msg { color: var(--danger); font-size: 13px; }

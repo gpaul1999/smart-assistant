@@ -16,6 +16,19 @@ dẫn từ tài liệu của user** ("grounded"); CẤM sinh nội dung không c
 → nói thẳng "không tìm thấy trong tài liệu". Nền tảng: Chrome Prompt API (Gemini Nano,
 on-device) — Constitution I giữ nguyên.
 
+## Amendment D6 (2026-07-06 — chủ dự án đổi scope tier)
+
+- **FR-031 (sửa)**: kho tài liệu mở cho CẢ Free: dán text, **tổng kho ≤3.000 ký tự**
+  (`lib/doc-limits.js`, hằng số một chỗ). Pro: **nhập file text-format**
+  (txt/md/csv/tsv/json/html/xml/srt/vtt/log/yaml) **không giới hạn ký tự**; extract text
+  chạy LOCAL (`lib/doc-import.js` — bóc thẻ HTML, bỏ timestamp phụ đề). PDF/DOCX: phase
+  sau, vẫn local (pdf.js vendor / DecompressionStream).
+- **FR-037 (sửa)**: thẻ trả lời live mở cho Free (giới hạn nằm ở tầng nhập kho);
+  "Rà soát phỏng vấn" + Whisper Small vẫn là Pro.
+- **Ghi chú markitdown**: là MCP tool Python phía DEV (đọc tài liệu khi phát triển) —
+  không nhúng vào extension được và không được gửi tài liệu ra ngoài (Constitution I);
+  sản phẩm dùng convert JS local cùng tinh thần.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Kho tài liệu tham chiếu (Priority: P1)

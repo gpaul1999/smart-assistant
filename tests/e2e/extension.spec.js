@@ -332,24 +332,32 @@ test('viewer: panel Dữ liệu của bạn + xóa toàn bộ', async () => {
   await page.close();
 });
 
-test('docs page: tạo docset, thêm tài liệu (chunk sẵn), xóa docset', async () => {
+test('docs page (D6): free dùng được với hạn mức 3000 ký tự tổng; file import ẩn khi free', async () => {
   const page = await context.newPage();
   await page.goto(extUrl('docs/docs.html'));
-  await expect(page.locator('#pro-banner')).toBeVisible(); // chưa Pro → banner
+  await expect(page.locator('#tier-info')).toContainText('3.000'); // free: hiện hạn mức
+  await expect(page.locator('#file-import-label')).toBeHidden(); // nhập file là Pro
 
   await page.locator('#new-docset').fill('Khách ACME');
   await page.locator('#add-docset').click();
   await expect(page.locator('#docsets li')).toContainText('Khách ACME');
   await expect(page.locator('#doc-pane')).toBeVisible();
 
+  // trong hạn mức → thêm được (2500 ký tự)
   await page.locator('#doc-title').fill('Hợp đồng 2026');
-  await page.locator('#doc-content').fill(
-    'Điều 5. Bảo hành: 24 tháng kể từ ngày nghiệm thu. '.repeat(60)
-  );
+  await page.locator('#doc-content').fill('x'.repeat(2500));
   await page.locator('#add-doc').click();
   const docLi = page.locator('#docs li').first();
   await expect(docLi).toContainText('Hợp đồng 2026');
   await expect(docLi).toContainText('đoạn'); // chunk đã tính sẵn
+  await expect(page.locator('#tier-info')).toContainText('2.500 / 3.000');
+
+  // vượt hạn mức tổng → chặn + thông báo còn lại (FR-031 sửa đổi D6)
+  await page.locator('#doc-content').fill('y'.repeat(1000));
+  await page.locator('#add-doc').click();
+  await expect(page.locator('#limit-msg')).toBeVisible();
+  await expect(page.locator('#limit-msg')).toContainText('còn 500');
+  await expect(page.locator('#docs li')).toHaveCount(1, { timeout: 2000 });
 
   await page.screenshot({ path: join(ARTIFACTS, 'docs.png') });
   page.on('dialog', (d) => d.accept());

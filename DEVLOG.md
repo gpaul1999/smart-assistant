@@ -1,5 +1,23 @@
 # DEVLOG — smart-assistant
 
+## 2026-07-06 — D6: Copilot mở cho Free (3.000 ký tự) + Pro nhập file, convert local
+
+Chủ dự án đổi scope: Free cũng được cung cấp tài liệu + nhận đề xuất — text dán tay, TỔNG
+kho ≤3.000 ký tự (diễn giải "tối đa 3000 ký tự" thành tổng-kho để giữ giá trị nâng cấp;
+đổi thành per-doc chỉ cần sửa 1 hằng số + 1 hàm trong `lib/doc-limits.js`). Pro: nhập file
+text-format không giới hạn.
+
+- `lib/doc-limits.js` (thuần): FREE_TOTAL_CHARS, assessAddition, canImportFile + tests.
+- `lib/doc-import.js` (thuần): extractText theo đuôi file — stripMarkup (HTML/XML),
+  stripCues (SRT/VTT), passthrough (txt/md/csv/json/yaml/log) + tests. **Đính chính
+  markitdown**: là MCP Python phía dev, không chạy trong extension được; convert sản phẩm
+  phải là JS local (Constitution I) — cùng tinh thần "mọi thứ → text đọc được".
+- docs page: tier-info + counter x/3.000, chặn vượt hạn kèm số còn lại, nút "Nhập file
+  (Pro)" (ẩn khi free); background bỏ gate Pro cho copilot live (gate giờ nằm ở tầng nhập
+  kho); popup bỏ nhãn ⭐. PDF/DOCX: roadmap (pdf.js / DecompressionStream — vẫn local).
+
+Gate: **77 unit + 20 E2E xanh** (E2E mới: hạn mức free chặn đúng "còn 500 ký tự").
+
 ## 2026-07-06 — Spec 004: nguồn âm mọi nơi (tab / hệ thống / chỉ mic)
 
 Yêu cầu chủ dự án: "bật lên là nghe được cả hai bên, không nhất thiết Meet/Zoom/Teams".

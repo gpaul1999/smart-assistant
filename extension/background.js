@@ -3,7 +3,6 @@
 
 import * as db from './lib/db.js';
 import { recoverInterrupted } from './lib/recovery.js';
-import { verifyLicense, PROD_PUBLIC_KEY } from './lib/license.js';
 import { sourceCapabilities } from './lib/source-mode.js';
 
 // Crash-safe recovery (FR-016): mỗi lần service worker khởi động lạnh, quét các phiên
@@ -138,15 +137,12 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
               });
             });
           } // mode 'mic': không cần streamId
-          const { settings = {}, license, licensePubKey } = await chrome.storage.local.get([
-            'settings', 'license', 'licensePubKey',
-          ]);
-          // spec 003: Copilot chỉ chạy khi Pro + đã chọn bộ tài liệu (FR-037)
-          let copilot = null;
-          if (settings.copilotDocsetId && license?.key) {
-            const v = await verifyLicense(license.key, licensePubKey || PROD_PUBLIC_KEY);
-            if (v.valid) copilot = { docsetId: settings.copilotDocsetId };
-          }
+          const { settings = {} } = await chrome.storage.local.get('settings');
+          // D6 (2026-07-06): Copilot live mở cho cả Free (kho giới hạn 3000 ký tự ở tầng
+          // nhập liệu — lib/doc-limits.js); chỉ cần đã chọn bộ tài liệu.
+          const copilot = settings.copilotDocsetId
+            ? { docsetId: settings.copilotDocsetId }
+            : null;
           await chrome.runtime.sendMessage({
             type: 'offscreen-start',
             streamId,
