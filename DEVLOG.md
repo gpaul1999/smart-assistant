@@ -1,5 +1,18 @@
 # DEVLOG — smart-assistant
 
+## 2026-07-06 — Ops review (gstack plan-ceo-review): khả thi vận hành + kiếm tiền
+
+Biên bản: `docs/ops-review-2026-07-06.md`. 9 findings: 2 CRITICAL (F1 Gemini Nano
+availability trên máy thật — cần trang "Năng lực máy" + đo thật; F2 chất lượng Whisper vi
+chưa dogfood), 3 HIGH (F3 permission nặng vs store review — cân nhắc bỏ nudge bản đầu;
+F4 tải model HF là điểm hỏng — cần retry/resume; F5 chưa có đầu ký key khi khách trả tiền
+— cần 1 webhook serverless ký Ed25519, không đụng dữ liệu họp), 4 MEDIUM (F6 bù telemetry
+bằng "Xuất chẩn đoán" local; F7 hint mic-only; F8 nợ lời hứa PDF/DOCX; F9 moat bền nhất là
+Copilot tài liệu — dồn marketing vào đó). Audit gate Free/Pro: gate 3.000 ký tự đúng khoảnh
+khắc đau; thiếu giá trị LẶP LẠI cho Pro → đề xuất B2 "email follow-up tự soạn" (Nano local).
+Roadmap 3 gói: A ops-hardening (trước beta) → store beta + demand test → B Pro value
+(B2 → B1 PDF/DOCX) → C retention. Giá đề xuất: $4.99/mo · $29/năm (VN 99k/599k), key exp 1 năm.
+
 ## 2026-07-06 — D6: Copilot mở cho Free (3.000 ký tự) + Pro nhập file, convert local
 
 Chủ dự án đổi scope: Free cũng được cung cấp tài liệu + nhận đề xuất — text dán tay, TỔNG
